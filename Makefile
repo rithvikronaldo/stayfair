@@ -1,6 +1,6 @@
 .PHONY: run build test vet tidy migrate-up migrate-down psql db-up db-down
 
-DB_URL ?= postgres://postgres:postgres@localhost:5432/stayfair?sslmode=disable
+DB_URL ?= postgres://postgres:postgres@localhost:5433/stayfair?sslmode=disable
 
 run:
 	go run ./cmd/api

@@ -9,7 +9,7 @@ type Config struct {
 
 func Load() Config {
 	return Config{
-		DBURL: getenv("DB_URL", "postgres://postgres:postgres@localhost:5432/stayfair?sslmode=disable"),
+		DBURL: getenv("DB_URL", "postgres://postgres:postgres@localhost:5433/stayfair?sslmode=disable"),
 		Port:  getenv("PORT", "8080"),
 	}
 }

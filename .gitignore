@@ -5,3 +5,6 @@ bin/
 vendor/
 .idea/
 *.swp
+
+# Personal Claude Code settings (repo-scoped, not for sharing)
+.claude/settings.local.json
