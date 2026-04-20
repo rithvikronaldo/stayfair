@@ -1,0 +1,7 @@
+bin/
+*.log
+.env
+.DS_Store
+vendor/
+.idea/
+*.swp

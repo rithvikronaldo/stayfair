@@ -1,0 +1,3 @@
+-- Populated Tue Apr 21 (Week 1 · Day 2 per execution plan).
+-- Will insert: 1 org (org_demo), 4 currencies (INR, USD, EUR, GBP),
+-- 5 accounts (cash, guest_payments, host_payable, commission, gst_payable).
