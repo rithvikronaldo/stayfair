@@ -1,4 +1,4 @@
-.PHONY: run build test vet tidy migrate-up migrate-down psql db-up db-down seed
+.PHONY: run build test test-integration vet tidy migrate-up migrate-down psql db-up db-down seed
 
 DB_URL ?= postgres://postgres:postgres@localhost:5433/stayfair?sslmode=disable
 
@@ -10,6 +10,9 @@ build:
 
 test:
 	go test ./...
+
+test-integration:
+	TEST_DB_URL="$(DB_URL)" go test -v ./internal/ledger -run Trigger
 
 vet:
 	go vet ./...
