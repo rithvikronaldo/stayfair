@@ -1,4 +1,4 @@
-.PHONY: run build test vet tidy migrate-up migrate-down psql db-up db-down
+.PHONY: run build test vet tidy migrate-up migrate-down psql db-up db-down seed
 
 DB_URL ?= postgres://postgres:postgres@localhost:5433/stayfair?sslmode=disable
 
@@ -31,3 +31,6 @@ migrate-down:
 
 psql:
 	docker exec -it stayfair-postgres psql -U postgres -d stayfair
+
+seed:
+	docker exec -i stayfair-postgres psql -U postgres -d stayfair < testdata/seed.sql
