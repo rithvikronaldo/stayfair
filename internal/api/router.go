@@ -14,6 +14,7 @@ func New(pool *pgxpool.Pool) *fiber.App {
 	})
 
 	app.Get("/health", Health(pool))
+	app.Post("/transactions", PostTransaction(pool))
 
 	return app
 }
