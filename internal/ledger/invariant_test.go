@@ -67,6 +67,24 @@ func TestCheckBalanced(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "balanced across three currencies independently",
+			entries: []Entry{
+				{Account: "cash_inr", Amount: 100000, Currency: "INR", Direction: DirIn},
+				{Account: "host_inr", Amount: 100000, Currency: "INR", Direction: DirOut},
+				{Account: "cash_usd", Amount: 1000, Currency: "USD", Direction: DirIn},
+				{Account: "host_usd", Amount: 1000, Currency: "USD", Direction: DirOut},
+				{Account: "cash_eur", Amount: 500, Currency: "EUR", Direction: DirIn},
+				{Account: "host_eur", Amount: 500, Currency: "EUR", Direction: DirOut},
+			},
+		},
+		{
+			name: "zero-amount balanced entries are allowed",
+			entries: []Entry{
+				{Account: "cash", Amount: 0, Currency: "INR", Direction: DirIn},
+				{Account: "host", Amount: 0, Currency: "INR", Direction: DirOut},
+			},
+		},
 	}
 
 	for _, tc := range cases {
