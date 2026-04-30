@@ -25,3 +25,26 @@ INSERT INTO accounts (org_id, code, name, type, currency) VALUES
     ('00000000-0000-0000-0000-000000000001', 'commission',     'Commission Revenue',  'revenue',   'INR'),
     ('00000000-0000-0000-0000-000000000001', 'gst_payable',    'GST Payable',         'liability', 'INR')
 ON CONFLICT (org_id, code) DO NOTHING;
+
+-- Historical FX rates between the four supported currencies. Stored as
+-- point-in-time observations: ledger.LookupRate picks the row with the
+-- largest as_of <= the requested timestamp. Three observations per pair
+-- give the tests something meaningful to discriminate between.
+--
+-- Rates are illustrative — close to real Apr-2026 levels but not authoritative.
+INSERT INTO fx_rates (from_currency, to_currency, rate, as_of) VALUES
+    ('USD', 'INR',  82.5000000000, '2026-01-01 00:00:00+00'),
+    ('USD', 'INR',  83.2500000000, '2026-03-01 00:00:00+00'),
+    ('USD', 'INR',  84.1000000000, '2026-04-15 00:00:00+00'),
+    ('INR', 'USD',   0.0121212121, '2026-01-01 00:00:00+00'),
+    ('INR', 'USD',   0.0120120120, '2026-03-01 00:00:00+00'),
+    ('INR', 'USD',   0.0118906064, '2026-04-15 00:00:00+00'),
+    ('EUR', 'INR',  89.5000000000, '2026-01-01 00:00:00+00'),
+    ('EUR', 'INR',  90.7500000000, '2026-04-15 00:00:00+00'),
+    ('INR', 'EUR',   0.0111731844, '2026-01-01 00:00:00+00'),
+    ('INR', 'EUR',   0.0110192837, '2026-04-15 00:00:00+00'),
+    ('GBP', 'INR', 105.0000000000, '2026-01-01 00:00:00+00'),
+    ('GBP', 'INR', 106.4000000000, '2026-04-15 00:00:00+00'),
+    ('INR', 'GBP',   0.0095238095, '2026-01-01 00:00:00+00'),
+    ('INR', 'GBP',   0.0093984962, '2026-04-15 00:00:00+00')
+ON CONFLICT (from_currency, to_currency, as_of) DO NOTHING;
