@@ -99,3 +99,38 @@ func GetBalance(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, code s
 		AsOf:     asOf,
 	}, nil
 }
+
+// ConvertBalance converts a balance from its native currency to a target currency
+// using the FX rate at the same point in time as the balance.
+//
+// The conversion multiplies the native amount by the rate and rounds to the
+// target currency's minor_unit_scale.
+//
+// Returns ErrNoRate if no exchange rate is available at or before the balance's
+// point in time.
+func ConvertBalance(ctx context.Context, pool *pgxpool.Pool, b *Balance, targetCurrency string) (*Balance, error) {
+	// Determine the point in time for the FX lookup.
+	asOf := time.Now()
+	if b.AsOf != nil {
+		asOf = *b.AsOf
+	}
+
+	// Look up the FX rate.
+	rate, err := LookupRate(ctx, pool, b.Currency, targetCurrency, asOf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert the amount: multiply by the rate and round to the target currency's scale.
+	convertedAmount, err := rate.Convert(b.Amount)
+	if err != nil {
+		return nil, fmt.Errorf("fx conversion: %w", err)
+	}
+
+	return &Balance{
+		Account:  b.Account,
+		Currency: targetCurrency,
+		Amount:   convertedAmount,
+		AsOf:     b.AsOf,
+	}, nil
+}

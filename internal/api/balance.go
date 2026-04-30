@@ -11,9 +11,12 @@ import (
 )
 
 // GetAccountBalance handles GET /accounts/:code/balance.
-// Optional query param: ?as_of=2026-03-15T00:00:00Z (RFC3339 timestamp).
-// If as_of is set, the balance reflects only transactions with
-// occurred_at <= as_of.
+// Optional query params:
+//   - ?as_of=2026-03-15T00:00:00Z (RFC3339 timestamp)
+//     If as_of is set, the balance reflects only transactions with occurred_at <= as_of.
+//   - ?in=USD (currency code)
+//     If in is set, the balance is converted from the account's native currency
+//     to the requested currency using the FX rate current at as_of (or now).
 func GetAccountBalance(pool *pgxpool.Pool) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		code := c.Params("code")
@@ -35,6 +38,8 @@ func GetAccountBalance(pool *pgxpool.Pool) fiber.Handler {
 			asOf = &parsed
 		}
 
+		targetCurrency := c.Query("in")
+
 		b, err := ledger.GetBalance(c.Context(), pool, demoOrgID, code, asOf)
 		if errors.Is(err, ledger.ErrUnknownAccount) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -47,6 +52,27 @@ func GetAccountBalance(pool *pgxpool.Pool) fiber.Handler {
 				"error":   "balance_query_failed",
 				"message": err.Error(),
 			})
+		}
+
+		// If a target currency is requested and differs from the native currency,
+		// convert the balance using the FX rate at the same point in time.
+		if targetCurrency != "" && targetCurrency != b.Currency {
+			converted, err := ledger.ConvertBalance(c.Context(), pool, b, targetCurrency)
+			if errors.Is(err, ledger.ErrNoRate) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error":   "no_fx_rate",
+					"message": "no exchange rate available for the requested conversion",
+					"from":    b.Currency,
+					"to":      targetCurrency,
+				})
+			}
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error":   "fx_conversion_failed",
+					"message": err.Error(),
+				})
+			}
+			b = converted
 		}
 
 		return c.JSON(b)

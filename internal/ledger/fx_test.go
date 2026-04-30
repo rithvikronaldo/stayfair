@@ -96,3 +96,67 @@ func TestLookupRateBeforeAnyObservationReturnsErrNoRate(t *testing.T) {
 		t.Fatalf("expected ErrNoRate, got %v", err)
 	}
 }
+
+
+func TestFXRate_Convert(t *testing.T) {
+	tests := []struct {
+		name     string
+		rate     string
+		amount   int64
+		expected int64
+	}{
+		{
+			name:     "identity rate",
+			rate:     "1.0000000000",
+			amount:   10000,
+			expected: 10000,
+		},
+		{
+			name:     "USD to INR (84.1)",
+			rate:     "84.1000000000",
+			amount:   10000, // $100.00
+			expected: 841000, // ₹8410.00
+		},
+		{
+			name:     "INR to USD (0.0119)",
+			rate:     "0.0119000000",
+			amount:   10000, // ₹100.00
+			expected: 119, // $1.19
+		},
+		{
+			name:     "rounding up",
+			rate:     "0.0119500000",
+			amount:   10000,
+			expected: 120, // 119.5 rounds to 120
+		},
+		{
+			name:     "rounding down",
+			rate:     "0.0119400000",
+			amount:   10000,
+			expected: 119, // 119.4 rounds to 119
+		},
+		{
+			name:     "whole number rate",
+			rate:     "100",
+			amount:   1234,
+			expected: 123400,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fx := &FXRate{
+				From: "XXX",
+				To:   "YYY",
+				Rate: tt.rate,
+			}
+			result, err := fx.Convert(tt.amount)
+			if err != nil {
+				t.Fatalf("Convert() error = %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("Convert() = %d, want %d", result, tt.expected)
+			}
+		})
+	}
+}

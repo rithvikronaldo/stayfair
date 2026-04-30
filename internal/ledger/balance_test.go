@@ -89,3 +89,96 @@ func TestGetBalancePointInTime(t *testing.T) {
 	t.Logf("guest_payments: as_of 2000=%d, current=%d, as_of 2099=%d",
 		bOld.Amount, bNow.Amount, bFuture.Amount)
 }
+
+// TestConvertBalance asserts that ConvertBalance correctly converts a balance
+// from one currency to another using the FX rate at the same point in time.
+func TestConvertBalance(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+
+	// Use a known timestamp from the seed data: 2026-04-01 has USD→INR rate of 84.1
+	asOf := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+
+	// Create a balance in USD
+	originalBalance := &Balance{
+		Account:  "test_account",
+		Currency: "USD",
+		Amount:   10000, // $100.00
+		AsOf:     &asOf,
+	}
+
+	// Convert to INR
+	converted, err := ConvertBalance(ctx, pool, originalBalance, "INR")
+	if err != nil {
+		t.Fatalf("ConvertBalance() error = %v", err)
+	}
+
+	if converted.Currency != "INR" {
+		t.Errorf("Currency: want INR, got %s", converted.Currency)
+	}
+
+	// At rate 84.1, $100.00 (10000 cents) should become ₹8410.00 (841000 paise)
+	expected := int64(841000)
+	if converted.Amount != expected {
+		t.Errorf("Amount: want %d, got %d", expected, converted.Amount)
+	}
+
+	if converted.Account != originalBalance.Account {
+		t.Errorf("Account: want %s, got %s", originalBalance.Account, converted.Account)
+	}
+
+	if converted.AsOf == nil || !converted.AsOf.Equal(*originalBalance.AsOf) {
+		t.Errorf("AsOf: want %v, got %v", originalBalance.AsOf, converted.AsOf)
+	}
+}
+
+// TestConvertBalanceSameCurrency asserts that converting to the same currency
+// returns the original balance unchanged.
+func TestConvertBalanceSameCurrency(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+
+	originalBalance := &Balance{
+		Account:  "test_account",
+		Currency: "USD",
+		Amount:   10000,
+		AsOf:     nil,
+	}
+
+	converted, err := ConvertBalance(ctx, pool, originalBalance, "USD")
+	if err != nil {
+		t.Fatalf("ConvertBalance() error = %v", err)
+	}
+
+	if converted.Amount != originalBalance.Amount {
+		t.Errorf("Amount: want %d, got %d", originalBalance.Amount, converted.Amount)
+	}
+
+	if converted.Currency != "USD" {
+		t.Errorf("Currency: want USD, got %s", converted.Currency)
+	}
+}
+
+// TestConvertBalanceNoRate asserts that converting with no available FX rate
+// returns ErrNoRate.
+func TestConvertBalanceNoRate(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+
+	// Use a timestamp before any FX rates exist
+	veryOld := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	originalBalance := &Balance{
+		Account:  "test_account",
+		Currency: "USD",
+		Amount:   10000,
+		AsOf:     &veryOld,
+	}
+
+	_, err := ConvertBalance(ctx, pool, originalBalance, "INR")
+	if err == nil {
+		t.Fatal("expected error for no FX rate, got nil")
+	}
+	if !errors.Is(err, ErrNoRate) {
+		t.Fatalf("expected ErrNoRate, got %v", err)
+	}
+}
