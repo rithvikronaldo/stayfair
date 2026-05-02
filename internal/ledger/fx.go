@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -56,73 +57,46 @@ func LookupRate(ctx context.Context, pool *pgxpool.Pool, from, to string, asOf t
 	return &FXRate{From: from, To: to, Rate: rate, AsOf: rateAsOf}, nil
 }
 
-// Convert multiplies the given amount (in the source currency's minor units)
-// by this rate and rounds to the nearest integer.
+// halfRat is a precomputed ½ used by Convert's rounding step.
+var halfRat = big.NewRat(1, 2)
+
+// Convert multiplies amount (in the source currency's minor units) by this
+// rate and rounds half-away-from-zero to the nearest integer minor unit.
 //
-// The rate is stored as a NUMERIC string with up to 10 decimal places
-// (e.g., "84.1000000000" or "0.0119000000"). We use integer arithmetic
-// to avoid floating-point drift.
+// Example: 10000 INR paise (₹100.00) at rate "0.0119" → 119 USD cents ($1.19).
 //
-// Example: converting 10000 INR paise (100.00 INR) to USD at rate "0.0119"
-// → 10000 * 0.0119 = 119.0 → 119 USD cents ($1.19).
+// The implementation uses math/big.Rat for the multiplication so that neither
+// integer overflow nor floating-point drift is possible — a balance of
+// 10^9 paise crossed with an 84.x rate would overflow a naive int64 product,
+// and IEEE 754 floats accumulate cents of error over millions of conversions.
+// big.Rat allocates, but balance queries aren't hot enough to care.
 //
-// The conversion assumes both currencies use the same minor_unit_scale
-// (typically 2 for cents/paise). If currencies have different scales,
-// the caller must adjust.
+// Sign handling: half-away-from-zero means a refund of -X rounds the same
+// number of cents as the original +X did, so reversing entries cancel
+// exactly. Standard half-up would mis-round liabilities and equity accounts
+// (which carry negative balances by convention).
+//
+// Returns an error if the rate string is unparseable, or if the rounded
+// result doesn't fit in int64 (only reachable for absurd inputs).
 func (fx *FXRate) Convert(amount int64) (int64, error) {
-	// Parse the rate as a fixed-point number with 10 decimal places.
-	// We'll represent the rate as an integer scaled by 10^10.
-	const rateScale = 10000000000 // 10^10
-	
-	var wholePart int64
-	var fracPartStr string
-	
-	// Try to parse as "whole.fractional"
-	n, err := fmt.Sscanf(fx.Rate, "%d.%s", &wholePart, &fracPartStr)
-	if err != nil && n == 0 {
-		// Try parsing as just a whole number (no decimal point)
-		n, err = fmt.Sscanf(fx.Rate, "%d", &wholePart)
-		if err != nil || n != 1 {
-			return 0, fmt.Errorf("invalid rate format: %s", fx.Rate)
-		}
-		fracPartStr = "0"
-	} else if n == 1 {
-		// Parsed whole part but no fractional part
-		fracPartStr = "0"
+	rate, ok := new(big.Rat).SetString(fx.Rate)
+	if !ok {
+		return 0, fmt.Errorf("ledger: invalid rate %q", fx.Rate)
 	}
-	
-	// Parse the fractional part as an integer and pad/truncate to 10 digits
-	var fracPart int64
-	if len(fracPartStr) > 0 && fracPartStr != "0" {
-		// Pad or truncate to exactly 10 digits
-		if len(fracPartStr) < 10 {
-			// Pad with zeros on the right
-			for len(fracPartStr) < 10 {
-				fracPartStr += "0"
-			}
-		} else if len(fracPartStr) > 10 {
-			// Truncate to 10 digits
-			fracPartStr = fracPartStr[:10]
-		}
-		
-		_, err := fmt.Sscanf(fracPartStr, "%d", &fracPart)
-		if err != nil {
-			return 0, fmt.Errorf("invalid fractional part: %s", fracPartStr)
-		}
+
+	product := new(big.Rat).Mul(rate, new(big.Rat).SetInt64(amount))
+
+	// Nudge by ±½ then truncate toward zero — yields half-away-from-zero.
+	if product.Sign() < 0 {
+		product.Sub(product, halfRat)
+	} else {
+		product.Add(product, halfRat)
 	}
-	
-	// Combine whole and fractional parts
-	rateInt := wholePart*rateScale + fracPart
-	
-	// Multiply amount by rate and divide by scale, with rounding
-	product := amount * rateInt
-	result := product / rateScale
-	
-	// Round to nearest: if remainder >= 0.5, round up
-	remainder := product % rateScale
-	if remainder*2 >= rateScale {
-		result++
+
+	// big.Int.Quo truncates toward zero, which is what we want post-nudge.
+	quotient := new(big.Int).Quo(product.Num(), product.Denom())
+	if !quotient.IsInt64() {
+		return 0, fmt.Errorf("ledger: conversion overflow: amount=%d rate=%s", amount, fx.Rate)
 	}
-	
-	return result, nil
+	return quotient.Int64(), nil
 }

@@ -141,6 +141,28 @@ func TestFXRate_Convert(t *testing.T) {
 			amount:   1234,
 			expected: 123400,
 		},
+		{
+			// Liabilities and equity accounts carry negative balances. The old
+			// implementation rounded these toward zero, which silently lost a
+			// minor unit on every fractional conversion. big.Rat-based Convert
+			// rounds half-away-from-zero so +X and -X round symmetrically.
+			name:     "negative amount mirrors positive",
+			rate:     "84.1000000000",
+			amount:   -10000,
+			expected: -841000,
+		},
+		{
+			name:     "negative amount rounds away from zero (down -> -120)",
+			rate:     "0.0119500000",
+			amount:   -10000,
+			expected: -120,
+		},
+		{
+			name:     "negative amount rounds away from zero (down -> -119)",
+			rate:     "0.0119400000",
+			amount:   -10000,
+			expected: -119,
+		},
 	}
 
 	for _, tt := range tests {

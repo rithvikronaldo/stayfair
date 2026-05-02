@@ -96,8 +96,9 @@ func TestConvertBalance(t *testing.T) {
 	pool := openTestDB(t)
 	ctx := context.Background()
 
-	// Use a known timestamp from the seed data: 2026-04-01 has USD→INR rate of 84.1
-	asOf := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
+	// 2026-04-20 is after the 2026-04-15 USD→INR observation (84.10),
+	// so LookupRate returns that rate.
+	asOf := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
 
 	// Create a balance in USD
 	originalBalance := &Balance{
