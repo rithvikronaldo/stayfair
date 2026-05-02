@@ -1,4 +1,4 @@
-.PHONY: run build test test-integration vet tidy migrate-up migrate-down psql db-up db-down seed
+.PHONY: run build test test-integration vet tidy migrate-up migrate-down psql db-up db-down seed snapshot
 
 DB_URL ?= postgres://postgres:postgres@localhost:5433/stayfair?sslmode=disable
 
@@ -37,3 +37,8 @@ psql:
 
 seed:
 	docker exec -i stayfair-postgres psql -U postgres -d stayfair < testdata/seed.sql
+
+# Compute per-account end-of-day balance snapshots for a given date.
+# Default is yesterday UTC; override with: make snapshot DATE=2026-04-30
+snapshot:
+	go run ./cmd/snapshot $(if $(DATE),--date=$(DATE),)
