@@ -167,11 +167,16 @@ func Capture(
 			ErrCaptureExceedsAuth, authAmount, captureAmount)
 	}
 
+	// occurred_at uses clock_timestamp() (real wall clock at INSERT time)
+	// rather than now() (transaction start time). The two can differ by tens
+	// of milliseconds inside a transaction, and now() can leave occurred_at
+	// behind a concurrent reader's wall-clock upper bound, making
+	// just-committed entries appear stale to a fresh GetBalance for ~50ms.
 	var txID uuid.UUID
 	var txCreatedAt, txOccurredAt time.Time
 	err = tx.QueryRow(ctx, `
 		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, now())
+		VALUES ($1, $2, clock_timestamp())
 		RETURNING id, created_at, occurred_at
 	`, orgID, description).Scan(&txID, &txCreatedAt, &txOccurredAt)
 	if err != nil {

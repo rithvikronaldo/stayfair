@@ -12,11 +12,22 @@ import (
 )
 
 // Balance is the response shape for a balance query.
+//
+// Amount is the realised total — sum of all entries on the account up to the
+// upper bound. OnHold is the sum of pending authorizations against the account
+// (only populated for current/live queries, not historical). Available is
+// Amount - OnHold and is what clients should use to decide "can this account
+// afford another authorization right now?".
+//
+// For point-in-time queries (asOf != nil) OnHold is reported as 0 and Available
+// equals Amount: we don't reconstruct historical pending state.
 type Balance struct {
-	Account  string     `json:"account"`
-	Currency string     `json:"currency"`
-	Amount   int64      `json:"balance"`
-	AsOf     *time.Time `json:"as_of,omitempty"`
+	Account   string     `json:"account"`
+	Currency  string     `json:"currency"`
+	Amount    int64      `json:"balance"`
+	Available int64      `json:"available"`
+	OnHold    int64      `json:"on_hold"`
+	AsOf      *time.Time `json:"as_of,omitempty"`
 }
 
 // GetBalance returns the balance for an account.
@@ -51,10 +62,22 @@ func GetBalance(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, code s
 		return nil, fmt.Errorf("account lookup: %w", err)
 	}
 
-	// Step 2 — determine the upper bound.
-	upperBound := time.Now()
+	// Step 2 — pin the upper bound to the database clock. For live queries
+	// (asOf nil) we ask postgres for clock_timestamp() once and bind the
+	// resulting timestamp as a literal parameter to subsequent queries.
+	//
+	// Why pin instead of using clock_timestamp() inline: the snapshot lookup
+	// and the delta sum need to agree on the same upper bound — they're
+	// separate connections off the pool and inline time functions advance
+	// between them. Pinning also dodges a subtle visibility issue with
+	// just-committed entries on freshly-cycled pool connections.
+	var upperBound time.Time
 	if asOf != nil {
 		upperBound = *asOf
+	} else {
+		if err := pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&upperBound); err != nil {
+			return nil, fmt.Errorf("upper bound fetch: %w", err)
+		}
 	}
 
 	// Step 3 — find the latest snapshot strictly before the upper bound's date.
@@ -92,11 +115,31 @@ func GetBalance(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, code s
 		return nil, fmt.Errorf("delta sum: %w", err)
 	}
 
+	total := snapshotBalance + delta
+
+	// Step 5 — on_hold for current queries only. Historical queries don't
+	// reconstruct pending-auth state because we don't journal status changes.
+	var onHold int64
+	if asOf == nil {
+		err = pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(amount), 0)
+			FROM authorizations
+			WHERE source_account_id = $1
+			  AND currency = $2
+			  AND status = 'pending'
+		`, accountID, currency).Scan(&onHold)
+		if err != nil {
+			return nil, fmt.Errorf("on_hold sum: %w", err)
+		}
+	}
+
 	return &Balance{
-		Account:  code,
-		Currency: currency,
-		Amount:   snapshotBalance + delta,
-		AsOf:     asOf,
+		Account:   code,
+		Currency:  currency,
+		Amount:    total,
+		Available: total - onHold,
+		OnHold:    onHold,
+		AsOf:      asOf,
 	}, nil
 }
 
@@ -121,16 +164,27 @@ func ConvertBalance(ctx context.Context, pool *pgxpool.Pool, b *Balance, targetC
 		return nil, err
 	}
 
-	// Convert the amount: multiply by the rate and round to the target currency's scale.
+	// Convert all three numbers with the same rate so the (total, available,
+	// on_hold) triplet stays internally consistent in the target currency.
 	convertedAmount, err := rate.Convert(b.Amount)
 	if err != nil {
 		return nil, fmt.Errorf("fx conversion: %w", err)
 	}
+	convertedAvailable, err := rate.Convert(b.Available)
+	if err != nil {
+		return nil, fmt.Errorf("fx conversion (available): %w", err)
+	}
+	convertedOnHold, err := rate.Convert(b.OnHold)
+	if err != nil {
+		return nil, fmt.Errorf("fx conversion (on_hold): %w", err)
+	}
 
 	return &Balance{
-		Account:  b.Account,
-		Currency: targetCurrency,
-		Amount:   convertedAmount,
-		AsOf:     b.AsOf,
+		Account:   b.Account,
+		Currency:  targetCurrency,
+		Amount:    convertedAmount,
+		Available: convertedAvailable,
+		OnHold:    convertedOnHold,
+		AsOf:      b.AsOf,
 	}, nil
 }

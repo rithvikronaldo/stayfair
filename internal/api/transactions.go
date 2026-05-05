@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/rithvikronaldo/stayfair/internal/events"
 	"github.com/rithvikronaldo/stayfair/internal/ledger"
 )
 
@@ -29,8 +30,9 @@ type postTransactionRequest struct {
 
 // PostTransaction handles POST /transactions. It honours the Idempotency-Key
 // header: if the same key is replayed, the original response is returned
-// rather than the transaction being written twice.
-func PostTransaction(pool *pgxpool.Pool) fiber.Handler {
+// rather than the transaction being written twice. On a fresh successful
+// post, broadcasts a `transaction_posted` event for live dashboards.
+func PostTransaction(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ctx := c.Context()
 		body := c.Body()
@@ -108,6 +110,7 @@ func PostTransaction(pool *pgxpool.Pool) fiber.Handler {
 			_ = completeIdempotency(ctx, pool, demoOrgID, idemKey, respBytes)
 		}
 
+		_ = broadcaster.Publish("transaction_posted", posted)
 		return c.Status(fiber.StatusCreated).Send(respBytes)
 	}
 }

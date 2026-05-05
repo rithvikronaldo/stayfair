@@ -160,6 +160,83 @@ func TestConvertBalanceSameCurrency(t *testing.T) {
 	}
 }
 
+// TestGetBalanceReportsOnHoldAndAvailable asserts that a pending authorization
+// against an account is reflected in the on_hold and available fields, and
+// that capturing or voiding the auth releases the hold.
+func TestGetBalanceReportsOnHoldAndAvailable(t *testing.T) {
+	pool := openTestDB(t)
+	orgID := uuid.MustParse(demoOrgID)
+	ctx := context.Background()
+
+	before, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	if err != nil {
+		t.Fatalf("baseline balance: %v", err)
+	}
+	if before.OnHold != 0 {
+		t.Fatalf("expected fresh fixture with on_hold=0, got %d (other tests may have leaked state)", before.OnHold)
+	}
+
+	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "balance test")
+	if err != nil {
+		t.Fatalf("authorize: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
+
+	withHold, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	if err != nil {
+		t.Fatalf("balance with pending auth: %v", err)
+	}
+	if withHold.OnHold != 500 {
+		t.Errorf("on_hold: want 500, got %d", withHold.OnHold)
+	}
+	if withHold.Available != withHold.Amount-500 {
+		t.Errorf("available: want %d (total-500), got %d", withHold.Amount-500, withHold.Available)
+	}
+	if withHold.Amount != before.Amount {
+		t.Errorf("total should not change on auth: was %d, now %d", before.Amount, withHold.Amount)
+	}
+
+	if err := Void(ctx, pool, auth.ID); err != nil {
+		t.Fatalf("void: %v", err)
+	}
+	released, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	if err != nil {
+		t.Fatalf("balance after void: %v", err)
+	}
+	if released.OnHold != 0 {
+		t.Errorf("on_hold after void: want 0, got %d", released.OnHold)
+	}
+	if released.Available != released.Amount {
+		t.Errorf("available after void: want %d, got %d", released.Amount, released.Available)
+	}
+}
+
+// TestGetBalancePointInTimeIgnoresOnHold asserts historical balance queries
+// don't try to reconstruct pending-auth state — they only report Amount.
+func TestGetBalancePointInTimeIgnoresOnHold(t *testing.T) {
+	pool := openTestDB(t)
+	orgID := uuid.MustParse(demoOrgID)
+	ctx := context.Background()
+
+	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "pit test")
+	if err != nil {
+		t.Fatalf("authorize: %v", err)
+	}
+	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
+
+	asOf := time.Now().UTC()
+	b, err := GetBalance(ctx, pool, orgID, "cash", &asOf)
+	if err != nil {
+		t.Fatalf("pit balance: %v", err)
+	}
+	if b.OnHold != 0 {
+		t.Errorf("point-in-time on_hold: want 0, got %d", b.OnHold)
+	}
+	if b.Available != b.Amount {
+		t.Errorf("point-in-time available should equal amount: amount=%d available=%d", b.Amount, b.Available)
+	}
+}
+
 // TestConvertBalanceNoRate asserts that converting with no available FX rate
 // returns ErrNoRate.
 func TestConvertBalanceNoRate(t *testing.T) {

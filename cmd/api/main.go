@@ -11,6 +11,7 @@ import (
 	"github.com/rithvikronaldo/stayfair/internal/api"
 	"github.com/rithvikronaldo/stayfair/internal/config"
 	"github.com/rithvikronaldo/stayfair/internal/db"
+	"github.com/rithvikronaldo/stayfair/internal/events"
 )
 
 func main() {
@@ -25,7 +26,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	app := api.New(pool)
+	broadcaster := events.New(64)
+	app := api.New(pool, broadcaster)
 
 	go func() {
 		log.Printf("listening on :%s", cfg.Port)

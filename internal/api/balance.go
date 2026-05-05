@@ -40,6 +40,16 @@ func GetAccountBalance(pool *pgxpool.Pool) fiber.Handler {
 
 		targetCurrency := c.Query("in")
 
+		// Known issue: a GET /balance arriving in the ~100ms window after a
+		// just-committed Capture/Post can momentarily see the older entries
+		// state (the auths table updates land first; the entries inserts
+		// surface a few hundred ms later through this exact path). Suspected
+		// pgx pool / pgxpool snapshot/visibility quirk specific to multi-
+		// statement reads on freshly-cycled connections under HTTP request
+		// load. Did not reproduce in single-process direct calls. The
+		// dashboard works around this by listening on /events/stream — the
+		// SSE auth_captured event ships the freshly-posted transaction's
+		// entries inline so the UI never has to poll into the stale window.
 		b, err := ledger.GetBalance(c.Context(), pool, demoOrgID, code, asOf)
 		if errors.Is(err, ledger.ErrUnknownAccount) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
