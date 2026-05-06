@@ -32,11 +32,16 @@ func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 	app.Get("/events/stream", StreamEvents(broadcaster))
 
 	app.Post("/transactions", PostTransaction(pool, broadcaster))
+	app.Get("/transactions", GetTransactions(pool))
 	app.Get("/accounts/:code/balance", GetAccountBalance(pool))
 
 	app.Post("/authorizations", PostAuthorization(pool, broadcaster))
 	app.Post("/authorizations/:id/capture", PostCapture(pool, broadcaster))
 	app.Post("/authorizations/:id/void", PostVoid(pool, broadcaster))
+
+	app.Post("/agents", PostAgent(pool, broadcaster))
+	app.Get("/agents", GetAgents(pool))
+	app.Post("/agents/:id/kill", PostKillAgent(pool, broadcaster))
 
 	return app
 }

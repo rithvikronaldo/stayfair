@@ -56,9 +56,11 @@ func TestCaptureFullAmount(t *testing.T) {
 		t.Fatalf("capture: %v", err)
 	}
 	defer func() {
+		// authorizations.transaction_id FKs into transactions, so the auth
+		// must be deleted (or its link nulled) before the transaction.
+		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 		pool.Exec(ctx, "DELETE FROM entries WHERE transaction_id = $1", posted.ID)
 		pool.Exec(ctx, "DELETE FROM transactions WHERE id = $1", posted.ID)
-		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 	}()
 
 	if len(posted.Entries) != 2 {
@@ -114,9 +116,11 @@ func TestCapturePartialAmount(t *testing.T) {
 		t.Fatalf("capture: %v", err)
 	}
 	defer func() {
+		// authorizations.transaction_id FKs into transactions, so the auth
+		// must be deleted (or its link nulled) before the transaction.
+		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 		pool.Exec(ctx, "DELETE FROM entries WHERE transaction_id = $1", posted.ID)
 		pool.Exec(ctx, "DELETE FROM transactions WHERE id = $1", posted.ID)
-		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 	}()
 
 	for _, e := range posted.Entries {
@@ -195,9 +199,11 @@ func TestVoidAfterCaptureRejected(t *testing.T) {
 		t.Fatalf("capture: %v", err)
 	}
 	defer func() {
+		// authorizations.transaction_id FKs into transactions, so the auth
+		// must be deleted (or its link nulled) before the transaction.
+		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 		pool.Exec(ctx, "DELETE FROM entries WHERE transaction_id = $1", posted.ID)
 		pool.Exec(ctx, "DELETE FROM transactions WHERE id = $1", posted.ID)
-		pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 	}()
 
 	err = Void(ctx, pool, auth.ID)

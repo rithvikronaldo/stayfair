@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -26,6 +28,69 @@ type postTransactionRequest struct {
 	Description string         `json:"description"`
 	OccurredAt  time.Time      `json:"occurred_at"`
 	Entries     []ledger.Entry `json:"entries"`
+}
+
+// GetTransactions handles GET /transactions. Supports ?account=, ?from=,
+// ?to=, ?limit=, ?cursor=. Returns a page of transactions newest-first with
+// each transaction's full entries inline, plus a next_cursor when more pages
+// exist. The dashboard's stream panel uses this to backfill on connect.
+func GetTransactions(pool *pgxpool.Pool) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		f := ledger.ListTransactionsFilter{
+			AccountCode: c.Query("account"),
+			Cursor:      c.Query("cursor"),
+		}
+
+		if raw := c.Query("from"); raw != "" {
+			t, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid_from", "message": "from must be RFC3339",
+				})
+			}
+			f.From = &t
+		}
+		if raw := c.Query("to"); raw != "" {
+			t, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid_to", "message": "to must be RFC3339",
+				})
+			}
+			f.To = &t
+		}
+		if raw := c.Query("limit"); raw != "" {
+			n, err := strconv.Atoi(raw)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error": "invalid_limit", "message": "limit must be an integer",
+				})
+			}
+			f.Limit = n
+		}
+
+		page, err := ledger.ListTransactions(c.Context(), pool, demoOrgID, f)
+		if err != nil {
+			if errors.Is(err, ledger.ErrUnknownAccount) {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error":   "unknown_account",
+					"message": err.Error(),
+				})
+			}
+			// Distinguish bad cursor from internal failure.
+			if strings.HasPrefix(err.Error(), "invalid cursor") {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"error":   "invalid_cursor",
+					"message": err.Error(),
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "list_failed",
+				"message": err.Error(),
+			})
+		}
+		return c.JSON(page)
+	}
 }
 
 // PostTransaction handles POST /transactions. It honours the Idempotency-Key
