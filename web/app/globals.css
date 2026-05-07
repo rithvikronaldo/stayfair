@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0A0A0B;
+  --surface-1: #111113;
+  --surface-2: #18181B;
+  --border: #27272A;
+  --fg: #FAFAFA;
+  --muted: #A1A1AA;
+  --accent: #F59E0B;
+  --green: #10B981;
+  --red: #EF4444;
+  --neon: #00F0FF;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-in-out-quad: cubic-bezier(0.45, 0, 0.55, 1);
+
+  --dur-micro: 80ms;
+  --dur-ui: 160ms;
+  --dur-entrance: 280ms;
+  --dur-hero: 480ms;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-neon: var(--neon);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum" 1, "zero" 1;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.25);
+  color: var(--fg);
+}
