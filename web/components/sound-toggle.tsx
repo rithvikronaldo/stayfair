@@ -1,10 +1,16 @@
 "use client";
 
-import { useSound } from "@/lib/sound";
+import { useEffect } from "react";
+
+import { hydrateSoundPref, useSound } from "@/lib/sound";
 
 export function SoundToggle() {
   const muted = useSound((s) => s.muted);
   const toggle = useSound((s) => s.toggle);
+
+  useEffect(() => {
+    hydrateSoundPref();
+  }, []);
 
   return (
     <button

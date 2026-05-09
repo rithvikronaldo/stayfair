@@ -176,11 +176,15 @@ function Delta({
 }
 
 function LiveTimestamp() {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+  if (!now) {
+    return <span className="text-accent">LIVE · ---- -- -- --:--:-- UTC</span>;
+  }
   const yyyy = now.getUTCFullYear();
   const mm = (now.getUTCMonth() + 1).toString().padStart(2, "0");
   const dd = now.getUTCDate().toString().padStart(2, "0");

@@ -15,16 +15,17 @@ export function TopBar({
   txCount: number;
   block: number;
 }) {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 200);
     return () => clearInterval(id);
   }, []);
 
-  const hh = now.getUTCHours().toString().padStart(2, "0");
-  const mm = now.getUTCMinutes().toString().padStart(2, "0");
-  const ss = now.getUTCSeconds().toString().padStart(2, "0");
-  const ms = now.getUTCMilliseconds().toString().padStart(3, "0");
+  const hh = now?.getUTCHours().toString().padStart(2, "0") ?? "--";
+  const mm = now?.getUTCMinutes().toString().padStart(2, "0") ?? "--";
+  const ss = now?.getUTCSeconds().toString().padStart(2, "0") ?? "--";
+  const ms = now?.getUTCMilliseconds().toString().padStart(3, "0") ?? "---";
 
   return (
     <header className="relative flex h-10 items-center border-b border-border bg-bg">

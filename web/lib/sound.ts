@@ -53,13 +53,10 @@ type SoundState = {
   setMuted: (b: boolean) => void;
 };
 
-const initialMuted =
-  typeof window === "undefined"
-    ? true
-    : localStorage.getItem(STORAGE_KEY) !== "false";
-
+// Always start muted=true so SSR and first client render match. Real
+// preference is loaded by the SoundToggle's mount effect.
 export const useSound = create<SoundState>((set) => ({
-  muted: initialMuted,
+  muted: true,
   toggle: () =>
     set((s) => {
       const next = !s.muted;
@@ -80,6 +77,12 @@ export const useSound = create<SoundState>((set) => ({
     set({ muted: b });
   },
 }));
+
+export function hydrateSoundPref() {
+  if (typeof window === "undefined") return;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored === "false") useSound.getState().setMuted(false);
+}
 
 if (typeof document !== "undefined") {
   document.addEventListener(
