@@ -125,7 +125,7 @@ function vendorFromDest(dest: string): string {
 }
 
 function inferVendorFromDescription(desc: string): string {
-  const m = desc.match(/vendor:(\w+)/i);
+  const m = desc.match(/(?:cp|vendor):(\w+)/i);
   return m ? m[1] : "pool";
 }
 

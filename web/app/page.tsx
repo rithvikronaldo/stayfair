@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { AgentsPane } from "@/components/agents-pane";
+import { LandingStrip } from "@/components/landing-strip";
 import { ScrubberShell } from "@/components/scrubber-shell";
 import { TopBar } from "@/components/topbar";
 import { TransactionStream } from "@/components/transaction-stream";
@@ -31,7 +32,8 @@ export default function Home() {
 
   return (
     <div className="relative h-dvh w-dvw overflow-hidden bg-bg text-fg">
-      <div className="grid h-full grid-rows-[40px_1fr_80px]">
+      <div className="grid h-full grid-rows-[36px_40px_1fr_80px]">
+        <LandingStrip />
         <TopBar
           agentCount={agents.filter((a) => a.status !== "killed").length}
           ccyCount={ccyCount}

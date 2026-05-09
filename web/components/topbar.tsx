@@ -35,7 +35,7 @@ export function TopBar({
           STAYFAIR
         </span>
         <span className="text-[11px] uppercase tracking-[0.1em] text-muted">
-          Agent Treasury
+          Ledger
         </span>
       </Group>
 
@@ -53,7 +53,7 @@ export function TopBar({
 
       <Group>
         <span className="num text-[11px] uppercase tracking-[0.1em] text-dim">
-          {agentCount} AGENTS · {ccyCount} CCY · {txCount.toLocaleString()} TX
+          {agentCount} ACCOUNTS · {ccyCount} CCY · {txCount.toLocaleString()} TX
         </span>
       </Group>
 

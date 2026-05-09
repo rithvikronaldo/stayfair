@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>StayFair · Agent Treasury (prototype)</title>
+<title>StayFair · Ledger Sandbox (prototype)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -488,7 +488,7 @@
     <div class="tb-group">
       <div class="brand-square"></div>
       <div class="brand">STAYFAIR</div>
-      <div class="breadcrumb">Agent Treasury</div>
+      <div class="breadcrumb">Ledger</div>
     </div>
     <div class="tb-group">
       <div class="breadcrumb dim num">LEDGER · BLOCK <span id="block">1,284,562</span></div>
@@ -497,7 +497,7 @@
       <div class="breadcrumb dim num">DOUBLE-ENTRY · USD BASE</div>
     </div>
     <div class="tb-group">
-      <div class="breadcrumb dim num"><span id="agentCount">5</span> AGENTS · <span id="ccyCount">3</span> CCY · <span id="txCount">1,247</span> TX</div>
+      <div class="breadcrumb dim num"><span id="agentCount">5</span> ACCOUNTS · <span id="ccyCount">3</span> CCY · <span id="txCount">1,247</span> TX</div>
     </div>
     <div class="grow"></div>
     <div class="tb-group">
@@ -524,7 +524,7 @@
         <span class="label dim num">SORT · BAL ↓</span>
       </div>
       <div class="agent-list" id="agentList"></div>
-      <div class="spawn" id="spawnBtn">+ Spawn agent</div>
+      <div class="spawn" id="spawnBtn">+ Create account</div>
     </aside>
 
     <!-- center -->
@@ -532,7 +532,7 @@
       <div class="center-meta">
         <span class="label fg">Treasury</span><span class="sep">·</span>
         <span class="label">USD</span><span class="sep">·</span>
-        <span class="label">All agents</span><span class="sep">·</span>
+        <span class="label">All accounts</span><span class="sep">·</span>
         <span class="label num">As of <span class="v" id="centerClock">LIVE</span></span>
         <div class="grow"></div>
         <span class="label num">Reconcile <span class="reconcile">OK</span></span>
@@ -793,8 +793,8 @@
                   : tx.direction === 'out'   ? 'OUT'
                   : 'HOLD';
     const fromTo = tx.direction === 'in'
-      ? `vendor:${tx.vendor}<span class="sep">→</span>${tx.agentCode} · ${tx.agentName}`
-      : `${tx.agentCode} · ${tx.agentName}<span class="sep">→</span>vendor:${tx.vendor}`;
+      ? `cp:${tx.vendor}<span class="sep">→</span>${tx.agentCode} · ${tx.agentName}`
+      : `${tx.agentCode} · ${tx.agentName}<span class="sep">→</span>cp:${tx.vendor}`;
     row.innerHTML = `
       <span class="pip"></span>
       <div>

@@ -14,7 +14,7 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
     <div className="flex h-full flex-col">
       <div className="flex h-8 items-center justify-between border-b border-border px-4">
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
-          Agents · {aliveCount} / {agents.length}
+          Accounts · {aliveCount} / {agents.length}
         </span>
         <span className="num text-[10px] tracking-[0.1em] text-dim">
           SORT · BAL ↓
@@ -24,7 +24,7 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
       <div className="flex-1 overflow-y-auto">
         {agents.length === 0 ? (
           <div className="px-4 py-6 text-[11px] text-muted">
-            bootstrapping agents…
+            bootstrapping demo tenant…
           </div>
         ) : (
           <AnimatePresence initial={false}>

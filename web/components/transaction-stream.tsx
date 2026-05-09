@@ -112,7 +112,7 @@ function Row({ tx }: { tx: TxRow }) {
         </div>
         <div className="num mt-1 truncate text-[11px] tracking-wide text-muted">
           {tx.agentCode} · {tx.agentName}{" "}
-          <span className="mx-1 text-dim">→</span> vendor:{tx.vendor}
+          <span className="mx-1 text-dim">→</span> cp:{tx.vendor}
         </div>
         <div className="num mt-0.5 truncate text-[9px] tracking-wide text-dim">
           {tx.hash} · block {tx.block.toLocaleString()}

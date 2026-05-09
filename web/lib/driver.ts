@@ -138,7 +138,7 @@ export function useSpendDriver() {
           dest: vendorPayee(a.currency),
           amount,
           currency: a.currency,
-          description: `vendor:${vendor} · ${a.name} call`,
+          description: `cp:${vendor} · ${a.name} call`,
         });
         // 88% capture, 12% void
         await sleep(180 + Math.random() * 320);

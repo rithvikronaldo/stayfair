@@ -56,7 +56,7 @@ export function SpawnAgentDialog({
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <button className="flex h-8 w-full items-center justify-center border border-accent/40 bg-accent/10 text-[11px] uppercase tracking-[0.14em] text-accent transition-colors hover:bg-accent/20">
-          + spawn agent
+          + create account
         </button>
       </Dialog.Trigger>
 
@@ -82,10 +82,10 @@ export function SpawnAgentDialog({
                 transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
               >
                 <Dialog.Title className="text-[11px] uppercase tracking-[0.14em] text-muted">
-                  spawn agent
+                  create account
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-[12px] text-muted">
-                  Creates the agent and its primary asset account.
+                  Adds a named asset account to the demo tenant.
                 </Dialog.Description>
 
                 <form
@@ -145,7 +145,7 @@ export function SpawnAgentDialog({
                       disabled={isSubmitting}
                       className="h-9 flex-1 border border-accent bg-accent text-[12px] uppercase tracking-[0.14em] text-bg disabled:opacity-50"
                     >
-                      {isSubmitting ? "spawning…" : "spawn"}
+                      {isSubmitting ? "creating…" : "create"}
                     </button>
                   </div>
                 </form>

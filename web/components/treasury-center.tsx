@@ -26,7 +26,7 @@ export function TreasuryCenter({
     <div className="relative flex h-full flex-col px-8 pt-6">
       <div className="flex h-6 items-center gap-3">
         <span className="text-[11px] uppercase tracking-[0.12em] text-fg">
-          Treasury
+          Ledger
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -34,7 +34,7 @@ export function TreasuryCenter({
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
-          All agents
+          All accounts
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="num text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -44,6 +44,9 @@ export function TreasuryCenter({
         <span className="num text-[11px] uppercase tracking-[0.12em] text-muted">
           Reconcile <span className="text-green">OK</span>
         </span>
+      </div>
+      <div className="mt-1 text-[10px] tracking-[0.1em] text-dim">
+        total ledger value · FX-converted at as_of timestamp
       </div>
 
       <div className="mt-8 grid grid-cols-[auto_1fr_auto] items-end gap-8">
