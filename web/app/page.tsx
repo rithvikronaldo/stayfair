@@ -1,71 +1,48 @@
+"use client";
+
+import { AgentsPane } from "@/components/agents-pane";
+import { ScrubberShell } from "@/components/scrubber-shell";
+import { TopBar } from "@/components/topbar";
+import { TransactionStream } from "@/components/transaction-stream";
+import { TreasuryCenter } from "@/components/treasury-center";
+import { useSimulator } from "@/lib/sim";
+
 export default function Home() {
+  const { agents, txs, block, totalUsd, totalFlash } = useSimulator();
+  const ccyCount = new Set(agents.map((a) => a.currency)).size;
+
   return (
-    <div className="grid h-screen w-screen grid-rows-[auto_1fr_auto] gap-px bg-border">
-      <header className="flex h-10 items-center justify-between bg-bg px-4 text-[11px] uppercase tracking-[0.12em] text-muted">
-        <span>agent treasury</span>
-        <span className="num text-fg">
-          as of <span className="text-accent">live</span>
-        </span>
-      </header>
+    <div className="relative h-dvh w-dvw overflow-hidden bg-bg text-fg">
+      <div className="grid h-full grid-rows-[40px_1fr_80px]">
+        <TopBar
+          agentCount={agents.filter((a) => a.alive).length}
+          ccyCount={ccyCount}
+          txCount={1247 + txs.length}
+          block={block}
+        />
 
-      <main className="grid grid-cols-[280px_1fr_360px] gap-px bg-border">
-        <Pane label="agents">
-          <Placeholder rows={5} />
-        </Pane>
+        <main className="grid grid-cols-[280px_1fr_360px] overflow-hidden">
+          <section className="border-r border-border">
+            <AgentsPane agents={agents} />
+          </section>
 
-        <Pane label="treasury">
-          <div className="flex h-full flex-col gap-6 p-6">
-            <div className="num text-[10px] uppercase tracking-[0.12em] text-muted">
-              total · usd
-            </div>
-            <div className="num text-[64px] font-medium leading-none tracking-tight">
-              0.00
-            </div>
-            <div className="flex-1 rounded-[2px] border border-border bg-surface-1" />
-          </div>
-        </Pane>
+          <section className="overflow-hidden">
+            <TreasuryCenter
+              totalUsd={totalUsd}
+              flash={totalFlash}
+              agents={agents}
+            />
+          </section>
 
-        <Pane label="stream">
-          <Placeholder rows={12} />
-        </Pane>
-      </main>
+          <section className="border-l border-border">
+            <TransactionStream txs={txs} />
+          </section>
+        </main>
 
-      <footer className="flex h-8 items-center bg-bg px-4 text-[10px] uppercase tracking-[0.14em] text-muted">
-        <span>scrubber · w5</span>
-      </footer>
-    </div>
-  );
-}
-
-function Pane({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col bg-surface-1">
-      <div className="flex h-7 items-center border-b border-border px-3 text-[10px] uppercase tracking-[0.14em] text-muted">
-        {label}
+        <ScrubberShell />
       </div>
-      <div className="flex-1 overflow-hidden">{children}</div>
-    </section>
-  );
-}
 
-function Placeholder({ rows }: { rows: number }) {
-  return (
-    <ul className="flex flex-col">
-      {Array.from({ length: rows }).map((_, i) => (
-        <li
-          key={i}
-          className="flex items-center justify-between border-b border-border px-3 py-2 text-[12px]"
-        >
-          <span className="text-muted">—</span>
-          <span className="num text-fg">0.00</span>
-        </li>
-      ))}
-    </ul>
+      <div className="vignette" />
+    </div>
   );
 }

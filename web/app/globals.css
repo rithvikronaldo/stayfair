@@ -5,12 +5,15 @@
   --surface-1: #111113;
   --surface-2: #18181B;
   --border: #27272A;
+  --border-2: #1F1F22;
   --fg: #FAFAFA;
   --muted: #A1A1AA;
+  --dim: #52525B;
   --accent: #F59E0B;
+  --accent-dim: #B45309;
   --green: #10B981;
   --red: #EF4444;
-  --neon: #00F0FF;
+  --neon: #22D3EE;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
@@ -27,9 +30,12 @@
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-border: var(--border);
+  --color-border-2: var(--border-2);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
+  --color-dim: var(--dim);
   --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
   --color-green: var(--green);
   --color-red: var(--red);
   --color-neon: var(--neon);
@@ -54,4 +60,59 @@ body {
 ::selection {
   background: rgba(245, 158, 11, 0.25);
   color: var(--fg);
+}
+
+/* Flash underlines — green = inflow, red = outflow, amber = pending hold */
+.flash-up,
+.flash-down,
+.flash-hold {
+  position: relative;
+}
+.flash-up::after,
+.flash-down::after,
+.flash-hold::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+}
+.flash-up::after {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+.flash-down::after {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+.flash-hold::after {
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
+}
+
+/* Cinematic vignette — top-right and bottom-left corners only */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background:
+    radial-gradient(28% 28% at 100% 0%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 75%),
+    radial-gradient(28% 28% at 0% 100%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 75%);
+}
+
+/* Scrollbar polish — subtle, terminal-ish */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--dim);
 }
