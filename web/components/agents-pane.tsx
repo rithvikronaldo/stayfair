@@ -2,13 +2,13 @@
 
 import { AnimatePresence, motion } from "motion/react";
 
-import type { SimAgent } from "@/lib/sim";
 import { AgentCard } from "@/components/agent-card";
 import { SpawnAgentDialog } from "@/components/spawn-agent-dialog";
 import { DUR, EASE } from "@/lib/motion";
+import type { AgentRow } from "@/lib/store";
 
-export function AgentsPane({ agents }: { agents: SimAgent[] }) {
-  const aliveCount = agents.filter((a) => a.alive).length;
+export function AgentsPane({ agents }: { agents: AgentRow[] }) {
+  const aliveCount = agents.filter((a) => a.status !== "killed").length;
 
   return (
     <div className="flex h-full flex-col">
@@ -22,20 +22,26 @@ export function AgentsPane({ agents }: { agents: SimAgent[] }) {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <AnimatePresence initial={false}>
-          {agents.map((a) => (
-            <motion.div
-              key={a.id}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
-            >
-              <AgentCard agent={a} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {agents.length === 0 ? (
+          <div className="px-4 py-6 text-[11px] text-muted">
+            bootstrapping agents…
+          </div>
+        ) : (
+          <AnimatePresence initial={false}>
+            {agents.map((a) => (
+              <motion.div
+                key={a.id}
+                layout
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
+              >
+                <AgentCard agent={a} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
       <div className="border-t border-border bg-[rgba(245,158,11,0.03)]">

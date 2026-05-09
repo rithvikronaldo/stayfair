@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, useMotionValue, useTransform, motion } from "motion/react";
 
-import { fmtMinor, type FlashState, type SimAgent } from "@/lib/sim";
+import { fmtMinor } from "@/lib/format";
 import { DUR, EASE } from "@/lib/motion";
+import type { AgentRow, FlashState } from "@/lib/store";
 
 export function TreasuryCenter({
   totalUsd,
@@ -13,7 +14,7 @@ export function TreasuryCenter({
 }: {
   totalUsd: number;
   flash: FlashState;
-  agents: SimAgent[];
+  agents: AgentRow[];
 }) {
   const tx24h = agents.reduce((acc, a) => acc + a.tx24h, 0);
   const burnPerHr = agents.reduce(

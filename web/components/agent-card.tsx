@@ -1,8 +1,9 @@
 "use client";
 
-import { fmtMinor, type SimAgent } from "@/lib/sim";
+import { fmtMinor } from "@/lib/format";
+import type { AgentRow } from "@/lib/store";
 
-export function AgentCard({ agent }: { agent: SimAgent }) {
+export function AgentCard({ agent }: { agent: AgentRow }) {
   const [whole, frac] = fmtMinor(agent.balance).split(".");
 
   const flashCls =
@@ -25,11 +26,12 @@ export function AgentCard({ agent }: { agent: SimAgent }) {
       <div
         className="absolute right-4 top-4 h-1.5 w-1.5"
         style={{
-          background: agent.alive
-            ? agent.active
-              ? "var(--accent)"
-              : "var(--green)"
-            : "var(--dim)",
+          background:
+            agent.status === "killed"
+              ? "var(--dim)"
+              : agent.active
+                ? "var(--accent)"
+                : "var(--green)",
         }}
       />
 

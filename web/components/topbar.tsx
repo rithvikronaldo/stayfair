@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { SoundToggle } from "@/components/sound-toggle";
+
 export function TopBar({
   agentCount,
   ccyCount,
@@ -70,16 +72,7 @@ export function TopBar({
             LIVE · {hh}:{mm}:{ss}.{ms}
           </span>
         </Pill>
-        <IconBtn>
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <path
-              d="M2 2v6M5 1v8M8 3v4"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeLinecap="round"
-            />
-          </svg>
-        </IconBtn>
+        <SoundToggle />
         <IconBtn>
           <svg width="10" height="10" viewBox="0 0 10 10">
             <circle cx="5" cy="5" r="1.4" fill="currentColor" />

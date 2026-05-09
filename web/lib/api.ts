@@ -55,6 +55,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type Authorization = {
+  id: string;
+  source_account: string;
+  dest_account: string;
+  amount: number;
+  currency: string;
+  status: "pending" | "captured" | "voided" | "expired";
+  description: string;
+  created_at: string;
+  expires_at: string;
+};
+
+export type PostedEntry = {
+  id: string;
+  account: string;
+  amount: number;
+  currency: string;
+  direction: "in" | "out";
+};
+
+export type PostedTransaction = {
+  id: string;
+  description: string;
+  occurred_at: string;
+  created_at: string;
+  entries: PostedEntry[];
+};
+
 export const api = {
   spawnAgent: (input: { name: string; currency: string }) =>
     request<Agent>("/agents", {
@@ -72,6 +100,37 @@ export const api = {
       `/accounts/${encodeURIComponent(code)}/balance${q ? `?${q}` : ""}`,
     );
   },
+  authorize: (input: {
+    source: string;
+    dest: string;
+    amount: number;
+    currency: string;
+    description?: string;
+  }) =>
+    request<Authorization>("/authorizations", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  capture: (id: string, amount: number) =>
+    request<{ authorization_id: string; transaction: PostedTransaction }>(
+      `/authorizations/${encodeURIComponent(id)}/capture`,
+      { method: "POST", body: JSON.stringify({ amount }) },
+    ),
+  voidAuth: (id: string) =>
+    request<{ authorization_id: string; status: string }>(
+      `/authorizations/${encodeURIComponent(id)}/void`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  postTransaction: (input: {
+    description: string;
+    occurred_at: string;
+    entries: { account: string; amount: number; currency: string; direction: "in" | "out" }[];
+  }, idempotencyKey?: string) =>
+    request<PostedTransaction>("/transactions", {
+      method: "POST",
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      body: JSON.stringify(input),
+    }),
 };
 
 export const SUPPORTED_CURRENCIES = ["USD", "EUR", "INR", "GBP"] as const;
