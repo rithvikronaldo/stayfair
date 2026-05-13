@@ -48,5 +48,10 @@ func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 	app.Get("/agents", GetAgents(pool))
 	app.Post("/agents/:id/kill", PostKillAgent(pool, broadcaster))
 
+	// Signup — anyone can hit this without a Bearer token; the middleware
+	// resolves to demo tenant but the handler doesn't use it. Returns a
+	// fresh API key once.
+	app.Post("/tenants", PostTenant(pool))
+
 	return app
 }
