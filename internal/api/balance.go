@@ -50,7 +50,7 @@ func GetAccountBalance(pool *pgxpool.Pool) fiber.Handler {
 		// dashboard works around this by listening on /events/stream — the
 		// SSE auth_captured event ships the freshly-posted transaction's
 		// entries inline so the UI never has to poll into the stale window.
-		b, err := ledger.GetBalance(c.Context(), pool, demoOrgID, code, asOf)
+		b, err := ledger.GetBalance(c.Context(), pool, demoOrgID, TenantID(c), code, asOf)
 		if errors.Is(err, ledger.ErrUnknownAccount) {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error":   "unknown_account",

@@ -39,7 +39,7 @@ type Balance struct {
 // Filtering is on transactions.occurred_at, not entries.created_at, so
 // backfilled events are reflected when they happened.
 //
-// Returns ErrUnknownAccount if (org, code) doesn't exist.
+// Returns ErrUnknownAccount if (org, tenant, code) doesn't exist.
 //
 // Performance: this implementation uses snapshot-and-delta replay. It looks
 // for the most recent account_snapshots row dated strictly before the upper
@@ -47,14 +47,14 @@ type Balance struct {
 // When no snapshot exists, it falls back to a full scan from time zero.
 // A nightly job (or `make snapshot`) is expected to populate snapshots for
 // recent dates so the delta is small.
-func GetBalance(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, code string, asOf *time.Time) (*Balance, error) {
-	// Step 1 — resolve the account.
+func GetBalance(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, code string, asOf *time.Time) (*Balance, error) {
+	// Step 1 — resolve the account (scoped to tenant).
 	var accountID uuid.UUID
 	var currency string
 	err := pool.QueryRow(ctx, `
 		SELECT id, currency FROM accounts
-		WHERE org_id = $1 AND code = $2
-	`, orgID, code).Scan(&accountID, &currency)
+		WHERE org_id = $1 AND tenant_id = $2 AND code = $3
+	`, orgID, tenantID, code).Scan(&accountID, &currency)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownAccount
 	}

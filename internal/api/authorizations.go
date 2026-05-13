@@ -42,7 +42,7 @@ func PostAuthorization(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fibe
 		}
 
 		auth, err := ledger.Authorize(
-			c.Context(), pool, demoOrgID,
+			c.Context(), pool, demoOrgID, TenantID(c),
 			req.Source, req.Dest, req.Amount, req.Currency, req.Description,
 		)
 		if status, payload, ok := mapAuthError(err); ok {
@@ -83,7 +83,7 @@ func PostCapture(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Hand
 			})
 		}
 
-		posted, err := ledger.Capture(c.Context(), pool, authID, req.Amount)
+		posted, err := ledger.Capture(c.Context(), pool, TenantID(c), authID, req.Amount)
 		if status, payload, ok := mapAuthError(err); ok {
 			return c.Status(status).JSON(payload)
 		}
@@ -117,7 +117,7 @@ func PostVoid(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handler
 			})
 		}
 
-		if err := ledger.Void(c.Context(), pool, authID); err != nil {
+		if err := ledger.Void(c.Context(), pool, TenantID(c), authID); err != nil {
 			if status, payload, ok := mapAuthError(err); ok {
 				return c.Status(status).JSON(payload)
 			}

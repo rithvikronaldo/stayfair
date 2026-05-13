@@ -37,8 +37,9 @@ type PostedTransaction struct {
 
 // Post validates a transaction, writes it atomically along with its entries,
 // and returns the persisted result. All entries must be balanced per currency
-// (CheckBalanced). If any step fails the whole write is rolled back.
-func Post(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t Transaction) (*PostedTransaction, error) {
+// (CheckBalanced). If any step fails the whole write is rolled back. Both the
+// transactions row and the account lookups are scoped by (orgID, tenantID).
+func Post(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, t Transaction) (*PostedTransaction, error) {
 	if err := CheckBalanced(t.Entries); err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func Post(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t Transactio
 	for _, e := range t.Entries {
 		codes = append(codes, e.Account)
 	}
-	accountIDs, err := resolveAccounts(ctx, tx, orgID, codes)
+	accountIDs, err := resolveAccounts(ctx, tx, orgID, tenantID, codes)
 	if err != nil {
 		return nil, err
 	}
@@ -61,10 +62,10 @@ func Post(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t Transactio
 	var txID uuid.UUID
 	var createdAt time.Time
 	err = tx.QueryRow(ctx, `
-		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO transactions (org_id, tenant_id, description, occurred_at)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at
-	`, orgID, t.Description, t.OccurredAt).Scan(&txID, &createdAt)
+	`, orgID, tenantID, t.Description, t.OccurredAt).Scan(&txID, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert transaction: %w", err)
 	}
@@ -102,12 +103,14 @@ func Post(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, t Transactio
 	}, nil
 }
 
-// resolveAccounts looks up account IDs by their (org, code) pair. Returns
-// ErrUnknownAccount if any requested code doesn't exist for the org.
-func resolveAccounts(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, codes []string) (map[string]uuid.UUID, error) {
+// resolveAccounts looks up account IDs by their (org, tenant, code) tuple.
+// Returns ErrUnknownAccount if any requested code doesn't exist within the
+// tenant's scope.
+func resolveAccounts(ctx context.Context, tx pgx.Tx, orgID, tenantID uuid.UUID, codes []string) (map[string]uuid.UUID, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT code, id FROM accounts WHERE org_id = $1 AND code = ANY($2)
-	`, orgID, codes)
+		SELECT code, id FROM accounts
+		WHERE org_id = $1 AND tenant_id = $2 AND code = ANY($3)
+	`, orgID, tenantID, codes)
 	if err != nil {
 		return nil, fmt.Errorf("query accounts: %w", err)
 	}

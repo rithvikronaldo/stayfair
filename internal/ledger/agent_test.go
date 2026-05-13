@@ -16,7 +16,7 @@ func TestSpawnAgentCreatesAgentAndAccount(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	a, err := SpawnAgent(ctx, pool, orgID, "test-spawn-1", "USD")
+	a, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-spawn-1", "USD")
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestSpawnAgentDuplicateNameRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	a, err := SpawnAgent(ctx, pool, orgID, "test-dupe", "USD")
+	a, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-dupe", "USD")
 	if err != nil {
 		t.Fatalf("first spawn: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestSpawnAgentDuplicateNameRejected(t *testing.T) {
 		pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", a.ID)
 	}()
 
-	if _, err := SpawnAgent(ctx, pool, orgID, "test-dupe", "EUR"); !errors.Is(err, ErrAgentExists) {
+	if _, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-dupe", "EUR"); !errors.Is(err, ErrAgentExists) {
 		t.Errorf("second spawn: want ErrAgentExists, got %v", err)
 	}
 }
@@ -85,7 +85,7 @@ func TestSpawnAgentUnknownCurrencyRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	_, err := SpawnAgent(ctx, pool, orgID, "test-bad-curr", "XYZ")
+	_, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-bad-curr", "XYZ")
 	if !errors.Is(err, ErrUnknownCurrency) {
 		t.Errorf("want ErrUnknownCurrency, got %v", err)
 	}
@@ -99,7 +99,7 @@ func TestSpawnAgentEmptyNameRejected(t *testing.T) {
 	ctx := context.Background()
 
 	for _, n := range []string{"", "   ", "\t"} {
-		if _, err := SpawnAgent(ctx, pool, orgID, n, "USD"); err == nil {
+		if _, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, n, "USD"); err == nil {
 			t.Errorf("name=%q: expected error, got nil", n)
 		}
 	}
@@ -112,7 +112,7 @@ func TestListAgentsIncludesBalance(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	a, err := SpawnAgent(ctx, pool, orgID, "test-list", "USD")
+	a, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-list", "USD")
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestListAgentsIncludesBalance(t *testing.T) {
 		pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", a.ID)
 	}()
 
-	agents, err := ListAgents(ctx, pool, orgID)
+	agents, err := ListAgents(ctx, pool, orgID, DemoTenantID)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestSetAgentStatusFlipsStatus(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	a, err := SpawnAgent(ctx, pool, orgID, "test-kill", "USD")
+	a, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "test-kill", "USD")
 	if err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
@@ -160,11 +160,11 @@ func TestSetAgentStatusFlipsStatus(t *testing.T) {
 		pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", a.ID)
 	}()
 
-	if err := SetAgentStatus(ctx, pool, orgID, a.ID, AgentKilled); err != nil {
+	if err := SetAgentStatus(ctx, pool, orgID, DemoTenantID, a.ID, AgentKilled); err != nil {
 		t.Fatalf("kill: %v", err)
 	}
 
-	got, err := GetAgent(ctx, pool, orgID, a.ID)
+	got, err := GetAgent(ctx, pool, orgID, DemoTenantID, a.ID)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestSetAgentStatusFlipsStatus(t *testing.T) {
 		t.Errorf("status: want killed, got %s", got.Status)
 	}
 
-	if err := SetAgentStatus(ctx, pool, orgID, uuid.New(), AgentKilled); !errors.Is(err, ErrAgentNotFound) {
+	if err := SetAgentStatus(ctx, pool, orgID, DemoTenantID, uuid.New(), AgentKilled); !errors.Is(err, ErrAgentNotFound) {
 		t.Errorf("unknown id: want ErrAgentNotFound, got %v", err)
 	}
 }
@@ -183,7 +183,7 @@ func TestGetAgentNotFound(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	if _, err := GetAgent(ctx, pool, orgID, uuid.New()); !errors.Is(err, ErrAgentNotFound) {
+	if _, err := GetAgent(ctx, pool, orgID, DemoTenantID, uuid.New()); !errors.Is(err, ErrAgentNotFound) {
 		t.Errorf("want ErrAgentNotFound, got %v", err)
 	}
 }

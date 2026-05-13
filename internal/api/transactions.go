@@ -69,7 +69,7 @@ func GetTransactions(pool *pgxpool.Pool) fiber.Handler {
 			f.Limit = n
 		}
 
-		page, err := ledger.ListTransactions(c.Context(), pool, demoOrgID, f)
+		page, err := ledger.ListTransactions(c.Context(), pool, demoOrgID, TenantID(c), f)
 		if err != nil {
 			if errors.Is(err, ledger.ErrUnknownAccount) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -113,8 +113,9 @@ func PostTransaction(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.
 		idemKey := c.Get("Idempotency-Key")
 		reqHash := hashBody(body)
 
+		tenantID := TenantID(c)
 		if idemKey != "" {
-			cached, err := lookupIdempotency(ctx, pool, demoOrgID, idemKey, reqHash)
+			cached, err := lookupIdempotency(ctx, pool, demoOrgID, tenantID, idemKey, reqHash)
 			if errors.Is(err, errHashMismatch) {
 				return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
 					"error":   "idempotency_hash_mismatch",
@@ -131,7 +132,7 @@ func PostTransaction(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.
 				c.Set("Idempotent-Replay", "true")
 				return c.Status(fiber.StatusOK).Send(cached)
 			}
-			if err := reserveIdempotency(ctx, pool, demoOrgID, idemKey, reqHash); err != nil {
+			if err := reserveIdempotency(ctx, pool, demoOrgID, tenantID, idemKey, reqHash); err != nil {
 				if errors.Is(err, errHashMismatch) {
 					return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
 						"error":   "idempotency_hash_mismatch",
@@ -156,7 +157,7 @@ func PostTransaction(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.
 			OccurredAt:  req.OccurredAt,
 			Entries:     req.Entries,
 		}
-		posted, err := ledger.Post(ctx, pool, demoOrgID, tx)
+		posted, err := ledger.Post(ctx, pool, demoOrgID, tenantID, tx)
 		if err != nil {
 			status, payload := mapLedgerError(err)
 			return c.Status(status).JSON(payload)
@@ -172,7 +173,7 @@ func PostTransaction(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.
 		respBytes, _ := json.Marshal(resp)
 
 		if idemKey != "" {
-			_ = completeIdempotency(ctx, pool, demoOrgID, idemKey, respBytes)
+			_ = completeIdempotency(ctx, pool, demoOrgID, tenantID, idemKey, respBytes)
 		}
 
 		_ = broadcaster.Publish("transaction_posted", posted)
@@ -217,18 +218,18 @@ func hashBody(body []byte) string {
 }
 
 // lookupIdempotency returns the stored response bytes if a completed record
-// exists for (orgID, key) and the request hash matches. Returns nil if no
-// record exists yet. Returns errHashMismatch if the same key was used with a
-// different request body.
-func lookupIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, key, reqHash string) ([]byte, error) {
+// exists for (orgID, tenantID, key) and the request hash matches. Returns nil
+// if no record exists yet. Returns errHashMismatch if the same key was used
+// with a different request body.
+func lookupIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, key, reqHash string) ([]byte, error) {
 	var storedHash string
 	var status string
 	var response []byte
 	err := pool.QueryRow(ctx, `
 		SELECT request_hash, status, response
 		FROM idempotency_keys
-		WHERE org_id = $1 AND key = $2
-	`, orgID, key).Scan(&storedHash, &status, &response)
+		WHERE org_id = $1 AND tenant_id = $2 AND key = $3
+	`, orgID, tenantID, key).Scan(&storedHash, &status, &response)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -246,12 +247,12 @@ func lookupIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID,
 
 // reserveIdempotency inserts a pending row. If a row already exists, returns
 // errHashMismatch or errStillPending depending on the conflict.
-func reserveIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, key, reqHash string) error {
+func reserveIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, key, reqHash string) error {
 	tag, err := pool.Exec(ctx, `
-		INSERT INTO idempotency_keys (org_id, key, request_hash, status)
-		VALUES ($1, $2, $3, 'pending')
+		INSERT INTO idempotency_keys (org_id, tenant_id, key, request_hash, status)
+		VALUES ($1, $2, $3, $4, 'pending')
 		ON CONFLICT (org_id, key) DO NOTHING
-	`, orgID, key, reqHash)
+	`, orgID, tenantID, key, reqHash)
 	if err != nil {
 		return err
 	}
@@ -261,8 +262,8 @@ func reserveIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID
 	var storedHash, status string
 	err = pool.QueryRow(ctx, `
 		SELECT request_hash, status FROM idempotency_keys
-		WHERE org_id = $1 AND key = $2
-	`, orgID, key).Scan(&storedHash, &status)
+		WHERE org_id = $1 AND tenant_id = $2 AND key = $3
+	`, orgID, tenantID, key).Scan(&storedHash, &status)
 	if err != nil {
 		return err
 	}
@@ -272,11 +273,11 @@ func reserveIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID
 	return errStillPending
 }
 
-func completeIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, key string, response []byte) error {
+func completeIdempotency(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, key string, response []byte) error {
 	_, err := pool.Exec(ctx, `
 		UPDATE idempotency_keys
-		SET status = 'completed', response = $3
-		WHERE org_id = $1 AND key = $2
-	`, orgID, key, response)
+		SET status = 'completed', response = $4
+		WHERE org_id = $1 AND tenant_id = $2 AND key = $3
+	`, orgID, tenantID, key, response)
 	return err
 }

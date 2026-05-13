@@ -39,14 +39,14 @@ type TransactionListPage struct {
 	NextCursor   string                `json:"next_cursor,omitempty"`
 }
 
-// ListTransactions returns a page of transactions for the org, filtered and
-// paginated by the given filter. Ordering is (occurred_at DESC, id DESC) —
-// newest first, with a stable tie-breaker on id so cursor pagination doesn't
-// duplicate or skip rows when timestamps collide.
+// ListTransactions returns a page of transactions for the tenant, filtered
+// and paginated by the given filter. Ordering is (occurred_at DESC, id DESC)
+// — newest first, with a stable tie-breaker on id so cursor pagination
+// doesn't duplicate or skip rows when timestamps collide.
 func ListTransactions(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID uuid.UUID,
+	orgID, tenantID uuid.UUID,
 	f ListTransactionsFilter,
 ) (*TransactionListPage, error) {
 	limit := f.Limit
@@ -72,8 +72,9 @@ func ListTransactions(
 	var accountID uuid.UUID
 	if f.AccountCode != "" {
 		err := pool.QueryRow(ctx, `
-			SELECT id FROM accounts WHERE org_id = $1 AND code = $2
-		`, orgID, f.AccountCode).Scan(&accountID)
+			SELECT id FROM accounts
+			WHERE org_id = $1 AND tenant_id = $2 AND code = $3
+		`, orgID, tenantID, f.AccountCode).Scan(&accountID)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %q", ErrUnknownAccount, f.AccountCode)
 		}
@@ -86,21 +87,21 @@ func ListTransactions(
 	rows, err := pool.Query(ctx, `
 		SELECT t.id, COALESCE(t.description, ''), t.occurred_at, t.created_at
 		FROM transactions t
-		WHERE t.org_id = $1
-		  AND ($2::timestamptz IS NULL OR t.occurred_at >= $2)
-		  AND ($3::timestamptz IS NULL OR t.occurred_at <= $3)
+		WHERE t.org_id = $1 AND t.tenant_id = $2
+		  AND ($3::timestamptz IS NULL OR t.occurred_at >= $3)
+		  AND ($4::timestamptz IS NULL OR t.occurred_at <= $4)
 		  AND (
-		    NOT $4
-		    OR (t.occurred_at < $5)
-		    OR (t.occurred_at = $5 AND t.id < $6)
+		    NOT $5
+		    OR (t.occurred_at < $6)
+		    OR (t.occurred_at = $6 AND t.id < $7)
 		  )
 		  AND (
-		    $7::uuid IS NULL
-		    OR EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = $7)
+		    $8::uuid IS NULL
+		    OR EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = $8)
 		  )
 		ORDER BY t.occurred_at DESC, t.id DESC
-		LIMIT $8
-	`, orgID, f.From, f.To, hasCursor, cursorOccurred, cursorID, nullableUUID(accountID), limit+1)
+		LIMIT $9
+	`, orgID, tenantID, f.From, f.To, hasCursor, cursorOccurred, cursorID, nullableUUID(accountID), limit+1)
 	if err != nil {
 		return nil, fmt.Errorf("query transactions: %w", err)
 	}

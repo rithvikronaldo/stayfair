@@ -30,7 +30,7 @@ func PostAgent(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handle
 			})
 		}
 
-		agent, err := ledger.SpawnAgent(c.Context(), pool, demoOrgID, req.Name, req.Currency)
+		agent, err := ledger.SpawnAgent(c.Context(), pool, demoOrgID, TenantID(c), req.Name, req.Currency)
 		switch {
 		case errors.Is(err, ledger.ErrAgentExists):
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
@@ -58,7 +58,7 @@ func PostAgent(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handle
 // its primary account's current balance.
 func GetAgents(pool *pgxpool.Pool) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		agents, err := ledger.ListAgents(c.Context(), pool, demoOrgID)
+		agents, err := ledger.ListAgents(c.Context(), pool, demoOrgID, TenantID(c))
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   "list_failed",
@@ -83,7 +83,7 @@ func PostKillAgent(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Ha
 			})
 		}
 
-		if err := ledger.SetAgentStatus(c.Context(), pool, demoOrgID, agentID, ledger.AgentKilled); err != nil {
+		if err := ledger.SetAgentStatus(c.Context(), pool, demoOrgID, TenantID(c), agentID, ledger.AgentKilled); err != nil {
 			if errors.Is(err, ledger.ErrAgentNotFound) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 					"error": "agent_not_found",

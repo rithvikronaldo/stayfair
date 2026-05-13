@@ -19,7 +19,7 @@ func TestAuthorizeCreatesPendingAuth(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 1000, "INR", "test auth")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 1000, "INR", "test auth")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
@@ -46,12 +46,12 @@ func TestCaptureFullAmount(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 1000, "INR", "capture full")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 1000, "INR", "capture full")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 
-	posted, err := Capture(ctx, pool, auth.ID, 1000)
+	posted, err := Capture(ctx, pool, DemoTenantID, auth.ID, 1000)
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
@@ -106,12 +106,12 @@ func TestCapturePartialAmount(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 1000, "INR", "capture partial")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 1000, "INR", "capture partial")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 
-	posted, err := Capture(ctx, pool, auth.ID, 700)
+	posted, err := Capture(ctx, pool, DemoTenantID, auth.ID, 700)
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
@@ -137,13 +137,13 @@ func TestCaptureExceedsAuthRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "exceed test")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 500, "INR", "exceed test")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 
-	_, err = Capture(ctx, pool, auth.ID, 600)
+	_, err = Capture(ctx, pool, DemoTenantID, auth.ID, 600)
 	if !errors.Is(err, ErrCaptureExceedsAuth) {
 		t.Fatalf("expected ErrCaptureExceedsAuth, got %v", err)
 	}
@@ -163,13 +163,13 @@ func TestVoidPending(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "void me")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 500, "INR", "void me")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 
-	if err := Void(ctx, pool, auth.ID); err != nil {
+	if err := Void(ctx, pool, DemoTenantID, auth.ID); err != nil {
 		t.Fatalf("first void: %v", err)
 	}
 
@@ -179,7 +179,7 @@ func TestVoidPending(t *testing.T) {
 		t.Errorf("status after void: want %s, got %s", AuthVoided, status)
 	}
 
-	if err := Void(ctx, pool, auth.ID); !errors.Is(err, ErrAuthNotPending) {
+	if err := Void(ctx, pool, DemoTenantID, auth.ID); !errors.Is(err, ErrAuthNotPending) {
 		t.Errorf("second void: want ErrAuthNotPending, got %v", err)
 	}
 }
@@ -190,11 +190,11 @@ func TestVoidAfterCaptureRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "no void after capture")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 500, "INR", "no void after capture")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
-	posted, err := Capture(ctx, pool, auth.ID, 500)
+	posted, err := Capture(ctx, pool, DemoTenantID, auth.ID, 500)
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestVoidAfterCaptureRejected(t *testing.T) {
 		pool.Exec(ctx, "DELETE FROM transactions WHERE id = $1", posted.ID)
 	}()
 
-	err = Void(ctx, pool, auth.ID)
+	err = Void(ctx, pool, DemoTenantID, auth.ID)
 	if !errors.Is(err, ErrAuthNotPending) {
 		t.Errorf("void after capture: want ErrAuthNotPending, got %v", err)
 	}
@@ -218,7 +218,7 @@ func TestVoidUnknownAuthReturnsErrAuthNotFound(t *testing.T) {
 	pool := openTestDB(t)
 	ctx := context.Background()
 
-	err := Void(ctx, pool, uuid.New())
+	err := Void(ctx, pool, DemoTenantID, uuid.New())
 	if !errors.Is(err, ErrAuthNotFound) {
 		t.Errorf("expected ErrAuthNotFound, got %v", err)
 	}
@@ -231,7 +231,7 @@ func TestAuthorizeUnknownAccountReturnsErrUnknownAccount(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	_, err := Authorize(ctx, pool, orgID, "no_such_account", "guest_payments", 1000, "INR", "")
+	_, err := Authorize(ctx, pool, orgID, DemoTenantID, "no_such_account", "guest_payments", 1000, "INR", "")
 	if !errors.Is(err, ErrUnknownAccount) {
 		t.Errorf("expected ErrUnknownAccount, got %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAuthorizeCurrencyMismatch(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	_, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 1000, "USD", "wrong currency")
+	_, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 1000, "USD", "wrong currency")
 	if !errors.Is(err, ErrCurrencyMismatch) {
 		t.Errorf("expected ErrCurrencyMismatch, got %v", err)
 	}
@@ -259,7 +259,7 @@ func TestAuthorizeNonPositiveAmountRejected(t *testing.T) {
 	ctx := context.Background()
 
 	for _, amount := range []int64{0, -1, -1000} {
-		if _, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", amount, "INR", ""); err == nil {
+		if _, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", amount, "INR", ""); err == nil {
 			t.Errorf("amount=%d: expected error, got nil", amount)
 		}
 	}
@@ -272,7 +272,7 @@ func TestAuthorizeSameSourceAndDestRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	if _, err := Authorize(ctx, pool, orgID, "cash", "cash", 1000, "INR", ""); err == nil {
+	if _, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "cash", 1000, "INR", ""); err == nil {
 		t.Error("expected error for source==dest, got nil")
 	}
 }

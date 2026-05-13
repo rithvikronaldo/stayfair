@@ -28,6 +28,11 @@ func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 		AllowHeaders: "Origin,Content-Type,Accept,Authorization,Idempotency-Key",
 	}))
 
+	// Resolve tenant_id from Bearer token (or default to demo tenant when
+	// the header is absent — keeps the public dashboard working). Every
+	// handler downstream reads it via api.TenantID(c).
+	app.Use(TenantAuth(pool))
+
 	app.Get("/health", Health(pool))
 	app.Get("/events/stream", StreamEvents(broadcaster))
 

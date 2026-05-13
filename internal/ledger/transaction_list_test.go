@@ -25,12 +25,12 @@ func makeTestTransactions(
 	txIDs := make([]uuid.UUID, 0, count)
 
 	for i := range count {
-		auth, err := Authorize(ctx, pool, orgID, accountCode, "guest_payments", 1, "INR", "list-test")
+		auth, err := Authorize(ctx, pool, orgID, DemoTenantID, accountCode, "guest_payments", 1, "INR", "list-test")
 		if err != nil {
 			t.Fatalf("authorize %d: %v", i, err)
 		}
 		authIDs = append(authIDs, auth.ID)
-		posted, err := Capture(ctx, pool, auth.ID, 1)
+		posted, err := Capture(ctx, pool, DemoTenantID, auth.ID, 1)
 		if err != nil {
 			t.Fatalf("capture %d: %v", i, err)
 		}
@@ -61,7 +61,7 @@ func TestListTransactionsByAccount(t *testing.T) {
 	cleanup := makeTestTransactions(t, pool, orgID, "cash", 3)
 	defer cleanup()
 
-	page, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{
+	page, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{
 		AccountCode: "cash",
 		Limit:       5,
 	})
@@ -102,7 +102,7 @@ func TestListTransactionsCursorPagination(t *testing.T) {
 	var pages int
 	cursor := ""
 	for {
-		page, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{
+		page, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{
 			AccountCode: "cash",
 			Limit:       3,
 			Cursor:      cursor,
@@ -142,7 +142,7 @@ func TestListTransactionsTimeRange(t *testing.T) {
 	veryOld := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	stillOld := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	page, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{
+	page, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{
 		From: &veryOld,
 		To:   &stillOld,
 	})
@@ -161,7 +161,7 @@ func TestListTransactionsBadCursorRejected(t *testing.T) {
 	ctx := context.Background()
 
 	for _, c := range []string{"!!!", "YWJj"} { // YWJj = "abc" base64'd, no separator
-		_, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{Cursor: c})
+		_, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{Cursor: c})
 		if err == nil {
 			t.Errorf("cursor=%q: expected error, got nil", c)
 		}
@@ -175,7 +175,7 @@ func TestListTransactionsLimitClamping(t *testing.T) {
 	ctx := context.Background()
 
 	for _, lim := range []int{-1, 0, 1, 100, 500, 9999} {
-		page, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{Limit: lim})
+		page, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{Limit: lim})
 		if err != nil {
 			t.Fatalf("limit=%d: %v", lim, err)
 		}
@@ -210,7 +210,7 @@ func TestListTransactionsUnknownAccountRejected(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	_, err := ListTransactions(ctx, pool, orgID, ListTransactionsFilter{
+	_, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{
 		AccountCode: "no_such_account",
 	})
 	if !errors.Is(err, ErrUnknownAccount) {

@@ -43,11 +43,12 @@ var (
 
 // SpawnAgent creates an agent and an asset-type account for it, atomically.
 // The account code is derived from the agent's UUID: agent_<8-char>_<currency>.
-// Returns ErrAgentExists if (orgID, name) already exists.
+// Returns ErrAgentExists if (orgID, name) already exists. Both the agent
+// row and the account row land under tenantID.
 func SpawnAgent(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID uuid.UUID,
+	orgID, tenantID uuid.UUID,
 	name, currency string,
 ) (*Agent, error) {
 	name = strings.TrimSpace(name)
@@ -81,9 +82,9 @@ func SpawnAgent(
 	agent.Name = name
 	agent.Currency = currency
 	err = tx.QueryRow(ctx, `
-		INSERT INTO agents (org_id, name) VALUES ($1, $2)
+		INSERT INTO agents (org_id, tenant_id, name) VALUES ($1, $2, $3)
 		RETURNING id, status, created_at
-	`, orgID, name).Scan(&agent.ID, &agent.Status, &agent.CreatedAt)
+	`, orgID, tenantID, name).Scan(&agent.ID, &agent.Status, &agent.CreatedAt)
 	if err != nil {
 		// 23505 is unique_violation
 		if strings.Contains(err.Error(), "agents_org_id_name_key") {
@@ -98,9 +99,9 @@ func SpawnAgent(
 	)
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO accounts (org_id, code, name, type, currency, agent_id)
-		VALUES ($1, $2, $3, 'asset', $4, $5)
-	`, orgID, agent.AccountCode, name+" wallet ("+currency+")", currency, agent.ID)
+		INSERT INTO accounts (org_id, tenant_id, code, name, type, currency, agent_id)
+		VALUES ($1, $2, $3, $4, 'asset', $5, $6)
+	`, orgID, tenantID, agent.AccountCode, name+" wallet ("+currency+")", currency, agent.ID)
 	if err != nil {
 		return nil, fmt.Errorf("insert agent account: %w", err)
 	}
@@ -119,9 +120,9 @@ type AgentSummary struct {
 	Balance int64 `json:"balance"`
 }
 
-// ListAgents returns every agent for the org with its primary account's
+// ListAgents returns every agent for the tenant with its primary account's
 // current balance. Newest agent first.
-func ListAgents(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) ([]AgentSummary, error) {
+func ListAgents(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID) ([]AgentSummary, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT
 			ag.id, ag.name, ag.status, ag.created_at,
@@ -132,9 +133,9 @@ func ListAgents(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) ([]Age
 			), 0)
 		FROM agents ag
 		JOIN accounts a ON a.agent_id = ag.id
-		WHERE ag.org_id = $1
+		WHERE ag.org_id = $1 AND ag.tenant_id = $2
 		ORDER BY ag.created_at DESC, a.code ASC
-	`, orgID)
+	`, orgID, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
@@ -154,8 +155,8 @@ func ListAgents(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID) ([]Age
 	return out, rows.Err()
 }
 
-// GetAgent returns one agent by id (within the org).
-func GetAgent(ctx context.Context, pool *pgxpool.Pool, orgID, agentID uuid.UUID) (*Agent, error) {
+// GetAgent returns one agent by id (within the tenant + org).
+func GetAgent(ctx context.Context, pool *pgxpool.Pool, orgID, tenantID, agentID uuid.UUID) (*Agent, error) {
 	var a Agent
 	err := pool.QueryRow(ctx, `
 		SELECT
@@ -163,9 +164,9 @@ func GetAgent(ctx context.Context, pool *pgxpool.Pool, orgID, agentID uuid.UUID)
 			acc.code, acc.currency
 		FROM agents ag
 		JOIN accounts acc ON acc.agent_id = ag.id
-		WHERE ag.id = $1 AND ag.org_id = $2
+		WHERE ag.id = $1 AND ag.org_id = $2 AND ag.tenant_id = $3
 		LIMIT 1
-	`, agentID, orgID).Scan(
+	`, agentID, orgID, tenantID).Scan(
 		&a.ID, &a.Name, &a.Status, &a.CreatedAt, &a.AccountCode, &a.Currency,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -178,16 +179,17 @@ func GetAgent(ctx context.Context, pool *pgxpool.Pool, orgID, agentID uuid.UUID)
 }
 
 // SetAgentStatus flips an agent's status (typically active → killed). Returns
-// ErrAgentNotFound if the agent doesn't exist within the org.
+// ErrAgentNotFound if the agent doesn't exist within the tenant + org.
 func SetAgentStatus(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID, agentID uuid.UUID,
+	orgID, tenantID, agentID uuid.UUID,
 	status AgentStatus,
 ) error {
 	tag, err := pool.Exec(ctx, `
-		UPDATE agents SET status = $3 WHERE id = $1 AND org_id = $2
-	`, agentID, orgID, status)
+		UPDATE agents SET status = $4
+		WHERE id = $1 AND org_id = $2 AND tenant_id = $3
+	`, agentID, orgID, tenantID, status)
 	if err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}

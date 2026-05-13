@@ -15,7 +15,7 @@ func TestGetBalanceUnknownAccount(t *testing.T) {
 	pool := openTestDB(t)
 	orgID := uuid.MustParse(demoOrgID)
 
-	_, err := GetBalance(context.Background(), pool, orgID, "no_such_account", nil)
+	_, err := GetBalance(context.Background(), pool, orgID, DemoTenantID, "no_such_account", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown account, got nil")
 	}
@@ -31,7 +31,7 @@ func TestGetBalanceKnownAccountReturnsCurrency(t *testing.T) {
 	pool := openTestDB(t)
 	orgID := uuid.MustParse(demoOrgID)
 
-	b, err := GetBalance(context.Background(), pool, orgID, "cash", nil)
+	b, err := GetBalance(context.Background(), pool, orgID, DemoTenantID, "cash", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestGetBalancePointInTime(t *testing.T) {
 
 	// Far in the past — before any conceivable transaction.
 	veryOld := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	bOld, err := GetBalance(ctx, pool, orgID, "guest_payments", &veryOld)
+	bOld, err := GetBalance(ctx, pool, orgID, DemoTenantID, "guest_payments", &veryOld)
 	if err != nil {
 		t.Fatalf("old query: %v", err)
 	}
@@ -71,12 +71,12 @@ func TestGetBalancePointInTime(t *testing.T) {
 
 	// Far future — should match the current-balance query.
 	veryFuture := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
-	bFuture, err := GetBalance(ctx, pool, orgID, "guest_payments", &veryFuture)
+	bFuture, err := GetBalance(ctx, pool, orgID, DemoTenantID, "guest_payments", &veryFuture)
 	if err != nil {
 		t.Fatalf("future query: %v", err)
 	}
 
-	bNow, err := GetBalance(ctx, pool, orgID, "guest_payments", nil)
+	bNow, err := GetBalance(ctx, pool, orgID, DemoTenantID, "guest_payments", nil)
 	if err != nil {
 		t.Fatalf("current query: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestGetBalanceReportsOnHoldAndAvailable(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	before, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	before, err := GetBalance(ctx, pool, orgID, DemoTenantID, "cash", nil)
 	if err != nil {
 		t.Fatalf("baseline balance: %v", err)
 	}
@@ -176,13 +176,13 @@ func TestGetBalanceReportsOnHoldAndAvailable(t *testing.T) {
 		t.Fatalf("expected fresh fixture with on_hold=0, got %d (other tests may have leaked state)", before.OnHold)
 	}
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "balance test")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 500, "INR", "balance test")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 
-	withHold, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	withHold, err := GetBalance(ctx, pool, orgID, DemoTenantID, "cash", nil)
 	if err != nil {
 		t.Fatalf("balance with pending auth: %v", err)
 	}
@@ -196,10 +196,10 @@ func TestGetBalanceReportsOnHoldAndAvailable(t *testing.T) {
 		t.Errorf("total should not change on auth: was %d, now %d", before.Amount, withHold.Amount)
 	}
 
-	if err := Void(ctx, pool, auth.ID); err != nil {
+	if err := Void(ctx, pool, DemoTenantID, auth.ID); err != nil {
 		t.Fatalf("void: %v", err)
 	}
-	released, err := GetBalance(ctx, pool, orgID, "cash", nil)
+	released, err := GetBalance(ctx, pool, orgID, DemoTenantID, "cash", nil)
 	if err != nil {
 		t.Fatalf("balance after void: %v", err)
 	}
@@ -218,14 +218,14 @@ func TestGetBalancePointInTimeIgnoresOnHold(t *testing.T) {
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	auth, err := Authorize(ctx, pool, orgID, "cash", "guest_payments", 500, "INR", "pit test")
+	auth, err := Authorize(ctx, pool, orgID, DemoTenantID, "cash", "guest_payments", 500, "INR", "pit test")
 	if err != nil {
 		t.Fatalf("authorize: %v", err)
 	}
 	defer pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", auth.ID)
 
 	asOf := time.Now().UTC()
-	b, err := GetBalance(ctx, pool, orgID, "cash", &asOf)
+	b, err := GetBalance(ctx, pool, orgID, DemoTenantID, "cash", &asOf)
 	if err != nil {
 		t.Fatalf("pit balance: %v", err)
 	}

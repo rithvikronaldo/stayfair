@@ -64,7 +64,7 @@ func TestSnapshotAcceleratedBalanceMatchesNaive(t *testing.T) {
 	// Capture naive balances (full scan from time zero) for each account.
 	naive := map[string]int64{}
 	for _, code := range accounts {
-		b, err := GetBalance(ctx, pool, orgID, code, nil)
+		b, err := GetBalance(ctx, pool, orgID, DemoTenantID, code, nil)
 		if err != nil {
 			t.Fatalf("naive %s: %v", code, err)
 		}
@@ -81,7 +81,7 @@ func TestSnapshotAcceleratedBalanceMatchesNaive(t *testing.T) {
 
 	// Re-query each account and assert the value matches naive.
 	for _, code := range accounts {
-		b, err := GetBalance(ctx, pool, orgID, code, nil)
+		b, err := GetBalance(ctx, pool, orgID, DemoTenantID, code, nil)
 		if err != nil {
 			t.Fatalf("accelerated %s: %v", code, err)
 		}

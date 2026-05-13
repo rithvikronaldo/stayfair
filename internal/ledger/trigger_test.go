@@ -20,6 +20,7 @@ import (
 // skipped so `go test ./...` stays fast.
 
 const demoOrgID = "00000000-0000-0000-0000-000000000001"
+const demoTenantID = "00000000-0000-0000-0000-000000000010"
 
 func openTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -64,10 +65,10 @@ func TestTriggerRejectsUnbalancedRawInsert(t *testing.T) {
 
 	var txID uuid.UUID
 	err = tx.QueryRow(ctx, `
-		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO transactions (org_id, tenant_id, description, occurred_at)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id
-	`, demoOrgID, "DELIBERATELY UNBALANCED (test)", time.Now()).Scan(&txID)
+	`, demoOrgID, demoTenantID, "DELIBERATELY UNBALANCED (test)", time.Now()).Scan(&txID)
 	if err != nil {
 		t.Fatalf("insert tx: %v", err)
 	}
@@ -107,10 +108,10 @@ func TestTriggerAllowsBalancedRawInsert(t *testing.T) {
 
 	var txID uuid.UUID
 	err = tx.QueryRow(ctx, `
-		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO transactions (org_id, tenant_id, description, occurred_at)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id
-	`, demoOrgID, "BALANCED (test)", time.Now()).Scan(&txID)
+	`, demoOrgID, demoTenantID, "BALANCED (test)", time.Now()).Scan(&txID)
 	if err != nil {
 		t.Fatalf("insert tx: %v", err)
 	}
@@ -150,10 +151,10 @@ func TestTriggerRejectsUnbalancedMultiCurrency(t *testing.T) {
 
 	var txID uuid.UUID
 	err = tx.QueryRow(ctx, `
-		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, $3)
+		INSERT INTO transactions (org_id, tenant_id, description, occurred_at)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id
-	`, demoOrgID, "Multi-currency imbalance (test)", time.Now()).Scan(&txID)
+	`, demoOrgID, demoTenantID, "Multi-currency imbalance (test)", time.Now()).Scan(&txID)
 	if err != nil {
 		t.Fatalf("insert tx: %v", err)
 	}

@@ -48,16 +48,17 @@ var (
 )
 
 // Authorize reserves `amount` from sourceCode, earmarked for an eventual
-// transfer to destCode. Both accounts must exist within orgID and have the
-// requested currency. The authorization is `pending` until Capture or Void.
+// transfer to destCode. Both accounts must exist within (orgID, tenantID) and
+// have the requested currency. The authorization is `pending` until Capture
+// or Void.
 //
 // No entries are created here — Authorize does not move money. It records
 // intent. Available balance for the source account is `total - SUM(pending
-// authorizations on this account)` (computed in GetBalance, day 2 of W3).
+// authorizations on this account)` (computed in GetBalance).
 func Authorize(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	orgID uuid.UUID,
+	orgID, tenantID uuid.UUID,
 	sourceCode, destCode string,
 	amount int64,
 	currency, description string,
@@ -69,11 +70,11 @@ func Authorize(
 		return nil, fmt.Errorf("ledger: source and destination must differ")
 	}
 
-	sourceID, sourceCurr, err := resolveAccountCurrency(ctx, pool, orgID, sourceCode)
+	sourceID, sourceCurr, err := resolveAccountCurrency(ctx, pool, orgID, tenantID, sourceCode)
 	if err != nil {
 		return nil, fmt.Errorf("source: %w", err)
 	}
-	destID, destCurr, err := resolveAccountCurrency(ctx, pool, orgID, destCode)
+	destID, destCurr, err := resolveAccountCurrency(ctx, pool, orgID, tenantID, destCode)
 	if err != nil {
 		return nil, fmt.Errorf("dest: %w", err)
 	}
@@ -91,10 +92,11 @@ func Authorize(
 	}
 	err = pool.QueryRow(ctx, `
 		INSERT INTO authorizations (
-			org_id, source_account_id, dest_account_id, amount, currency, description
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			org_id, tenant_id, source_account_id, dest_account_id,
+			amount, currency, description
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, status, created_at, expires_at
-	`, orgID, sourceID, destID, amount, currency, description).Scan(
+	`, orgID, tenantID, sourceID, destID, amount, currency, description).Scan(
 		&auth.ID, &auth.Status, &auth.CreatedAt, &auth.ExpiresAt,
 	)
 	if err != nil {
@@ -108,12 +110,17 @@ func Authorize(
 // remainder (auth.Amount - captureAmount) is implicitly released — the auth's
 // status becomes 'captured' and only `captureAmount` worth of entries are written.
 //
+// The auth lookup is scoped by tenantID — passing the wrong tenant returns
+// ErrAuthNotFound, never a successful capture. This is the cross-tenant
+// security boundary: without it, any signed-up tenant could capture any
+// other tenant's authorizations by guessing UUIDs.
+//
 // Returns the resulting PostedTransaction. Returns ErrAuthNotFound,
 // ErrAuthNotPending, ErrAuthExpired, or ErrCaptureExceedsAuth as appropriate.
 func Capture(
 	ctx context.Context,
 	pool *pgxpool.Pool,
-	authID uuid.UUID,
+	tenantID, authID uuid.UUID,
 	captureAmount int64,
 ) (*PostedTransaction, error) {
 	if captureAmount <= 0 {
@@ -135,6 +142,8 @@ func Capture(
 		expiresAt                  time.Time
 	)
 	// FOR UPDATE so two concurrent captures of the same auth can't both succeed.
+	// AND a.tenant_id = $2 enforces cross-tenant isolation — capturing another
+	// tenant's auth by id returns ErrAuthNotFound, not a successful capture.
 	err = tx.QueryRow(ctx, `
 		SELECT a.org_id, a.source_account_id, a.dest_account_id, a.amount,
 		       a.currency, a.status, COALESCE(a.description, ''), a.expires_at,
@@ -142,9 +151,9 @@ func Capture(
 		FROM authorizations a
 		JOIN accounts src ON src.id = a.source_account_id
 		JOIN accounts dst ON dst.id = a.dest_account_id
-		WHERE a.id = $1
+		WHERE a.id = $1 AND a.tenant_id = $2
 		FOR UPDATE
-	`, authID).Scan(
+	`, authID, tenantID).Scan(
 		&orgID, &sourceID, &destID, &authAmount,
 		&currency, &status, &description, &expiresAt,
 		&sourceCode, &destCode,
@@ -175,10 +184,10 @@ func Capture(
 	var txID uuid.UUID
 	var txCreatedAt, txOccurredAt time.Time
 	err = tx.QueryRow(ctx, `
-		INSERT INTO transactions (org_id, description, occurred_at)
-		VALUES ($1, $2, clock_timestamp())
+		INSERT INTO transactions (org_id, tenant_id, description, occurred_at)
+		VALUES ($1, $2, $3, clock_timestamp())
 		RETURNING id, created_at, occurred_at
-	`, orgID, description).Scan(&txID, &txCreatedAt, &txOccurredAt)
+	`, orgID, tenantID, description).Scan(&txID, &txCreatedAt, &txOccurredAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert transaction: %w", err)
 	}
@@ -214,10 +223,10 @@ func Capture(
 		UPDATE authorizations
 		SET status = 'captured',
 		    captured_at = now(),
-		    captured_amount = $2,
-		    transaction_id = $3
-		WHERE id = $1
-	`, authID, captureAmount, txID)
+		    captured_amount = $3,
+		    transaction_id = $4
+		WHERE id = $1 AND tenant_id = $2
+	`, authID, tenantID, captureAmount, txID)
 	if err != nil {
 		return nil, fmt.Errorf("update auth: %w", err)
 	}
@@ -238,15 +247,16 @@ func Capture(
 	}, nil
 }
 
-// Void releases a pending authorization without creating any entries. Returns
-// ErrAuthNotFound if the auth doesn't exist, ErrAuthNotPending if it has
+// Void releases a pending authorization without creating any entries. Scoped
+// by tenantID — voiding another tenant's auth by id returns ErrAuthNotFound.
+// Returns ErrAuthNotFound if no auth matches, ErrAuthNotPending if it has
 // already been captured/voided/expired.
-func Void(ctx context.Context, pool *pgxpool.Pool, authID uuid.UUID) error {
+func Void(ctx context.Context, pool *pgxpool.Pool, tenantID, authID uuid.UUID) error {
 	tag, err := pool.Exec(ctx, `
 		UPDATE authorizations
 		SET status = 'voided', voided_at = now()
-		WHERE id = $1 AND status = 'pending'
-	`, authID)
+		WHERE id = $1 AND tenant_id = $2 AND status = 'pending'
+	`, authID, tenantID)
 	if err != nil {
 		return fmt.Errorf("void: %w", err)
 	}
@@ -254,9 +264,12 @@ func Void(ctx context.Context, pool *pgxpool.Pool, authID uuid.UUID) error {
 		return nil
 	}
 
-	// Distinguish "not found" from "not pending".
+	// Distinguish "not found" (or wrong tenant) from "not pending".
 	var status AuthStatus
-	err = pool.QueryRow(ctx, `SELECT status FROM authorizations WHERE id = $1`, authID).Scan(&status)
+	err = pool.QueryRow(ctx, `
+		SELECT status FROM authorizations
+		WHERE id = $1 AND tenant_id = $2
+	`, authID, tenantID).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrAuthNotFound
 	}
@@ -267,13 +280,14 @@ func Void(ctx context.Context, pool *pgxpool.Pool, authID uuid.UUID) error {
 }
 
 func resolveAccountCurrency(
-	ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, code string,
+	ctx context.Context, pool *pgxpool.Pool, orgID, tenantID uuid.UUID, code string,
 ) (uuid.UUID, string, error) {
 	var id uuid.UUID
 	var currency string
 	err := pool.QueryRow(ctx, `
-		SELECT id, currency FROM accounts WHERE org_id = $1 AND code = $2
-	`, orgID, code).Scan(&id, &currency)
+		SELECT id, currency FROM accounts
+		WHERE org_id = $1 AND tenant_id = $2 AND code = $3
+	`, orgID, tenantID, code).Scan(&id, &currency)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, "", fmt.Errorf("%w: %q", ErrUnknownAccount, code)
 	}
