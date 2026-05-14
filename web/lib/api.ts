@@ -1,3 +1,5 @@
+import { useApiKey } from "@/lib/api-key";
+
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -34,10 +36,19 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Send the user's API key as Bearer when they've signed in. Absent header
+  // → backend middleware resolves to the demo tenant (existing public
+  // dashboard behaviour).
+  const apiKey = useApiKey.getState().apiKey;
+  const authHeaders: Record<string, string> = apiKey
+    ? { Authorization: `Bearer ${apiKey}` }
+    : {};
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...(init?.headers ?? {}),
     },
   });
@@ -81,6 +92,19 @@ export type PostedTransaction = {
   occurred_at: string;
   created_at: string;
   entries: PostedEntry[];
+};
+
+export type Tenant = {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+};
+
+export type SignupResponse = {
+  tenant: Tenant;
+  api_key: string;
+  api_key_warning: string;
 };
 
 export const api = {
@@ -129,6 +153,11 @@ export const api = {
     request<PostedTransaction>("/transactions", {
       method: "POST",
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      body: JSON.stringify(input),
+    }),
+  signupTenant: (input: { email: string; name: string }) =>
+    request<SignupResponse>("/tenants", {
+      method: "POST",
       body: JSON.stringify(input),
     }),
 };

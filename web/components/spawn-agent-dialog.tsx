@@ -47,8 +47,7 @@ export function SpawnAgentDialog({
       reset();
       setOpen(false);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "spawn failed";
-      setServerError(msg);
+      setServerError(friendlyError(e));
     }
   };
 
@@ -95,10 +94,10 @@ export function SpawnAgentDialog({
                   <Field
                     label="name"
                     error={errors.name?.message}
-                    htmlFor="agent-name"
+                    htmlFor="account-name"
                   >
                     <input
-                      id="agent-name"
+                      id="account-name"
                       autoFocus
                       autoComplete="off"
                       placeholder="researcher"
@@ -110,10 +109,10 @@ export function SpawnAgentDialog({
                   <Field
                     label="currency"
                     error={errors.currency?.message}
-                    htmlFor="agent-currency"
+                    htmlFor="account-currency"
                   >
                     <select
-                      id="agent-currency"
+                      id="account-currency"
                       className="num h-9 border border-border bg-bg px-3 text-[13px] text-fg outline-none focus:border-accent"
                       {...register("currency")}
                     >
@@ -156,6 +155,27 @@ export function SpawnAgentDialog({
       </AnimatePresence>
     </Dialog.Root>
   );
+}
+
+// friendlyError maps backend ApiError codes to user-facing strings so the
+// modal never surfaces raw Go error text (e.g. "ledger: agent name already
+// exists") to end users.
+function friendlyError(e: unknown): string {
+  if (!(e instanceof ApiError)) return "Could not create account.";
+  switch (e.code) {
+    case "agent_exists":
+      return "An account with that name already exists.";
+    case "unknown_currency":
+      return "Currency not supported.";
+    case "agent_not_found":
+      return "Account not found.";
+    case "invalid_agent_id":
+      return "Invalid account id.";
+    case "invalid_json":
+      return "Please check your input and try again.";
+    default:
+      return "Could not create account. Try again in a moment.";
+  }
 }
 
 function Field({
