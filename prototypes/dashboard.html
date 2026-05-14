@@ -821,8 +821,15 @@
 
   // ─── tick loop ───
   function pickVendor(currency) {
-    const all = ['openai', 'anthropic', 'exa', 'deepl', 'perplex', 'mistral'];
-    if (currency === 'INR') return Math.random() < 0.5 ? 'openai' : 'deepl';
+    // Real-business counterparties any SaaS would pay. INR accounts get a
+    // slight bias toward razorpay (Indian payments processor) for regional
+    // flavor, but every account can hit every vendor.
+    const all = [
+      'aws', 'stripe', 'vercel', 'wise', 'linear',
+      'figma', 'twilio', 'datadog', 'github', 'mailgun',
+      'razorpay', 'zoho'
+    ];
+    if (currency === 'INR' && Math.random() < 0.4) return 'razorpay';
     return all[Math.floor(Math.random() * all.length)];
   }
 

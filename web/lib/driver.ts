@@ -13,7 +13,15 @@ const DEMO_AGENTS: { name: string; currency: string; fundMinor: number }[] = [
   { name: "translator", currency: "EUR", fundMinor: 3000 },
 ];
 
-const VENDORS = ["openai", "anthropic", "exa", "deepl", "perplex", "mistral"];
+// Real-business counterparties that any SaaS would pay — infra, payments,
+// communications, dev tools. Reads as legit fintech spend rather than
+// "AI agent buying tokens." Mixed across regions to match the multi-
+// currency seed accounts.
+const VENDORS = [
+  "aws", "stripe", "vercel", "wise", "linear",
+  "figma", "twilio", "datadog", "github", "mailgun",
+  "razorpay", "zoho",
+];
 
 function vendorPool(currency: string): string {
   return `treasury_pool_${currency.toLowerCase()}`;
