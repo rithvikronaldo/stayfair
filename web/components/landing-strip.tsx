@@ -6,20 +6,41 @@ import { SignupDialog } from "@/components/signup-dialog";
 import { api, ApiError } from "@/lib/api";
 import { useApiKey, hydrateApiKey } from "@/lib/api-key";
 
+// Per-key dismiss flag — once the user closes the curl card for a given
+// API key, it stays dismissed across reloads. New signups (different key)
+// get the card again.
+const DISMISS_KEY_PREFIX = "stayfair.curl_card_dismissed.";
+
+function isDismissed(apiKey: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(DISMISS_KEY_PREFIX + apiKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setDismissed(apiKey: string, dismissed: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    if (dismissed) localStorage.setItem(DISMISS_KEY_PREFIX + apiKey, "1");
+    else localStorage.removeItem(DISMISS_KEY_PREFIX + apiKey);
+  } catch {
+    // ignore
+  }
+}
+
 export function LandingStrip() {
   const apiKey = useApiKey((s) => s.apiKey);
   const email = useApiKey((s) => s.email);
   const clear = useApiKey((s) => s.clear);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [cardHidden, setCardHidden] = useState(false);
 
   useEffect(() => {
     hydrateApiKey();
     setMounted(true);
-    // If a key was hydrated from localStorage, validate it against the
-    // backend. If the tenant no longer exists (key revoked, DB wiped),
-    // clear local state and revert to signed-out — beats showing a
-    // "Signed in as you" state that 401s on every API call.
     if (useApiKey.getState().apiKey) {
       api.getMe().catch((e) => {
         if (e instanceof ApiError && e.status === 401) {
@@ -28,6 +49,13 @@ export function LandingStrip() {
       });
     }
   }, []);
+
+  // Re-check the dismiss flag whenever the key changes (sign-in, sign-out,
+  // switch). Fresh signups always see the card.
+  useEffect(() => {
+    if (apiKey) setCardHidden(isDismissed(apiKey));
+    else setCardHidden(false);
+  }, [apiKey]);
 
   // Until mounted, render the "not signed in" state — matches SSR exactly so
   // hydration doesn't trip on a key found in localStorage.
@@ -46,6 +74,21 @@ export function LandingStrip() {
               ? `Signed in as ${email || "you"} — your tenant view, polled every 5s. Try the API:`
               : "Multi-currency, double-entry, point-in-time-queryable. Below is the public demo tenant — get your own with a curl."}
           </span>
+          {signedIn && cardHidden && apiKey && (
+            <>
+              <span className="text-[11px] text-dim">·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDismissed(apiKey, false);
+                  setCardHidden(false);
+                }}
+                className="num text-[11px] uppercase tracking-[0.14em] text-accent hover:opacity-80"
+              >
+                Show curl
+              </button>
+            </>
+          )}
         </div>
 
         {signedIn ? (
@@ -67,14 +110,28 @@ export function LandingStrip() {
         )}
       </div>
 
-      {signedIn && apiKey && <CurlCard apiKey={apiKey} />}
+      {signedIn && apiKey && !cardHidden && (
+        <CurlCard
+          apiKey={apiKey}
+          onDismiss={() => {
+            setDismissed(apiKey, true);
+            setCardHidden(true);
+          }}
+        />
+      )}
 
       <SignupDialog open={open} onOpenChange={setOpen} />
     </>
   );
 }
 
-function CurlCard({ apiKey }: { apiKey: string }) {
+function CurlCard({
+  apiKey,
+  onDismiss,
+}: {
+  apiKey: string;
+  onDismiss: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   // Self-mode tenants start with zero accounts (the migration only
   // backfilled demo's existing rows). The first useful curl is therefore
@@ -98,17 +155,27 @@ function CurlCard({ apiKey }: { apiKey: string }) {
 
   return (
     <div className="fixed right-4 top-12 z-30 w-[520px] border border-border bg-surface-1 p-3 shadow-lg">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <span className="num text-[10px] uppercase tracking-[0.14em] text-accent">
           create your first account
         </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="num border border-accent bg-accent px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-bg"
-        >
-          {copied ? "copied" : "copy curl"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="num border border-accent bg-accent px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-bg"
+          >
+            {copied ? "copied" : "copy curl"}
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={onDismiss}
+            className="flex h-6 w-6 items-center justify-center border border-border text-[14px] leading-none text-muted hover:text-fg"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <pre className="num overflow-x-auto whitespace-pre text-[10px] leading-relaxed text-fg">
         {curl}
