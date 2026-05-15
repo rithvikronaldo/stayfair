@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { SignupDialog } from "@/components/signup-dialog";
+import { api, ApiError } from "@/lib/api";
 import { useApiKey, hydrateApiKey } from "@/lib/api-key";
 
 export function LandingStrip() {
@@ -15,6 +16,17 @@ export function LandingStrip() {
   useEffect(() => {
     hydrateApiKey();
     setMounted(true);
+    // If a key was hydrated from localStorage, validate it against the
+    // backend. If the tenant no longer exists (key revoked, DB wiped),
+    // clear local state and revert to signed-out — beats showing a
+    // "Signed in as you" state that 401s on every API call.
+    if (useApiKey.getState().apiKey) {
+      api.getMe().catch((e) => {
+        if (e instanceof ApiError && e.status === 401) {
+          useApiKey.getState().clear();
+        }
+      });
+    }
   }, []);
 
   // Until mounted, render the "not signed in" state — matches SSR exactly so

@@ -105,3 +105,123 @@ func TestCaptureCrossTenantRejected(t *testing.T) {
 	}
 	t.Logf("cross-tenant capture correctly rejected: %v", err)
 }
+
+// TestAuthorizeCrossTenantRejected proves Authorize can't be invoked by
+// tenant B against tenant A's account codes. The predicate fires in
+// resolveAccountCurrency before any INSERT happens.
+func TestAuthorizeCrossTenantRejected(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+	orgID := uuid.MustParse(demoOrgID)
+
+	tenantB, _, err := CreateTenant(
+		ctx, pool,
+		fmt.Sprintf("test-auth-%d@example.com", time.Now().UnixNano()),
+		"Cross-Tenant Authorize Test",
+	)
+	if err != nil {
+		t.Fatalf("create tenant B: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantB.ID)
+	})
+
+	// Tenant B tries to Authorize against demo tenant's seeded accounts
+	// ("cash" / "guest_payments"). Both exist in the DB — but not under
+	// tenant B's scope. The predicate in resolveAccountCurrency returns
+	// ErrUnknownAccount.
+	_, err = Authorize(
+		ctx, pool, orgID, tenantB.ID,
+		"cash", "guest_payments", 100, "INR", "cross-tenant authorize",
+	)
+	if err == nil {
+		t.Fatal("cross-tenant authorize succeeded — tenant_id predicate missing on accounts lookup")
+	}
+	if !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("expected ErrUnknownAccount, got %v", err)
+	}
+	t.Logf("cross-tenant authorize correctly rejected: %v", err)
+}
+
+// TestVoidCrossTenantRejected proves Void filters by tenant_id like
+// Capture does — guessing the auth UUID from another tenant fails.
+func TestVoidCrossTenantRejected(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+	orgID := uuid.MustParse(demoOrgID)
+
+	// Authorize under tenant A.
+	auth, err := Authorize(
+		ctx, pool, orgID, DemoTenantID,
+		"cash", "guest_payments", 100, "INR", "cross-tenant void test",
+	)
+	if err != nil {
+		t.Fatalf("authorize under A: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM authorizations WHERE id = $1`, auth.ID)
+	})
+
+	tenantB, _, err := CreateTenant(
+		ctx, pool,
+		fmt.Sprintf("test-void-%d@example.com", time.Now().UnixNano()),
+		"Cross-Tenant Void Test",
+	)
+	if err != nil {
+		t.Fatalf("create tenant B: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantB.ID)
+	})
+
+	err = Void(ctx, pool, tenantB.ID, auth.ID)
+	if err == nil {
+		t.Fatal("cross-tenant void succeeded — tenant_id predicate missing")
+	}
+	if !errors.Is(err, ErrAuthNotFound) {
+		t.Fatalf("expected ErrAuthNotFound, got %v", err)
+	}
+
+	// Confirm the auth is still pending — the failed void didn't mutate it.
+	var status AuthStatus
+	if err := pool.QueryRow(ctx,
+		`SELECT status FROM authorizations WHERE id = $1`, auth.ID,
+	).Scan(&status); err != nil {
+		t.Fatalf("status check: %v", err)
+	}
+	if status != AuthPending {
+		t.Fatalf("auth status changed by cross-tenant void: %s", status)
+	}
+	t.Logf("cross-tenant void correctly rejected; auth still %s", status)
+}
+
+// TestGetBalanceCrossTenantRejected proves the read path is also scoped.
+// The accounts WHERE clause filters by (org_id, tenant_id, code) so a
+// lookup against another tenant's account code returns ErrUnknownAccount.
+func TestGetBalanceCrossTenantRejected(t *testing.T) {
+	pool := openTestDB(t)
+	ctx := context.Background()
+	orgID := uuid.MustParse(demoOrgID)
+
+	tenantB, _, err := CreateTenant(
+		ctx, pool,
+		fmt.Sprintf("test-bal-%d@example.com", time.Now().UnixNano()),
+		"Cross-Tenant Balance Test",
+	)
+	if err != nil {
+		t.Fatalf("create tenant B: %v", err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM tenants WHERE id = $1`, tenantB.ID)
+	})
+
+	// Demo tenant has a "cash" account. Tenant B does not.
+	_, err = GetBalance(ctx, pool, orgID, tenantB.ID, "cash", nil)
+	if err == nil {
+		t.Fatal("cross-tenant balance read succeeded — tenant_id predicate missing on accounts lookup")
+	}
+	if !errors.Is(err, ErrUnknownAccount) {
+		t.Fatalf("expected ErrUnknownAccount, got %v", err)
+	}
+	t.Logf("cross-tenant balance read correctly rejected: %v", err)
+}

@@ -72,6 +72,29 @@ func CreateTenant(
 	return &t, rawKey, nil
 }
 
+// LookupTenantByID returns the tenant row for a given id. Used by
+// GET /tenants/me to surface the current request's resolved tenant.
+// Returns ErrTenantNotFound if no row matches.
+func LookupTenantByID(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	id uuid.UUID,
+) (*Tenant, error) {
+	var t Tenant
+	err := pool.QueryRow(ctx, `
+		SELECT id, email, COALESCE(name, ''), created_at
+		FROM tenants
+		WHERE id = $1
+	`, id).Scan(&t.ID, &t.Email, &t.Name, &t.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTenantNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lookup tenant by id: %w", err)
+	}
+	return &t, nil
+}
+
 // LookupTenantByAPIKey hashes the raw key and finds the matching tenant.
 // Called by the auth middleware on every authenticated request — keep
 // it allocation-light. Returns ErrTenantNotFound if no row matches.

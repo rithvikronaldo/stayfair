@@ -53,5 +53,10 @@ func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 	// fresh API key once.
 	app.Post("/tenants", PostTenant(pool))
 
+	// Current tenant — returns the tenant the middleware resolved (demo
+	// when no header, the user's when Bearer is valid). Frontend uses
+	// this on mount to validate a stored key still points somewhere.
+	app.Get("/tenants/me", GetCurrentTenant(pool))
+
 	return app
 }

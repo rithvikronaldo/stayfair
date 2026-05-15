@@ -56,3 +56,28 @@ func PostTenant(pool *pgxpool.Pool) fiber.Handler {
 		})
 	}
 }
+
+// GetCurrentTenant handles GET /tenants/me — returns the tenant resolved
+// from the request's Authorization header (or the demo tenant if no
+// header was sent). Used by the frontend on mount to validate that a
+// stored API key still maps to a real tenant; a 401 from the middleware
+// upstream is the signal to clear localStorage.
+func GetCurrentTenant(pool *pgxpool.Pool) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		t, err := ledger.LookupTenantByID(c.Context(), pool, TenantID(c))
+		if errors.Is(err, ledger.ErrTenantNotFound) {
+			// Should never happen — middleware would have 401'd already —
+			// but treat as not-authorised so the frontend clears state.
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "tenant_not_found",
+			})
+		}
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "tenant_lookup_failed",
+				"message": err.Error(),
+			})
+		}
+		return c.JSON(t)
+	}
+}

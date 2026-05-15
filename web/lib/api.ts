@@ -160,6 +160,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  getMe: () => request<Tenant>("/tenants/me"),
 };
 
 export const SUPPORTED_CURRENCIES = ["USD", "EUR", "INR", "GBP"] as const;
