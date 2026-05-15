@@ -43,7 +43,7 @@ export function LandingStrip() {
           <span className="text-[11px] text-dim">·</span>
           <span className="truncate text-[12px] text-muted">
             {signedIn
-              ? `Signed in as ${email || "you"} — your dashboard view ships next week. Use the API now:`
+              ? `Signed in as ${email || "you"} — your tenant view, polled every 5s. Try the API:`
               : "Multi-currency, double-entry, point-in-time-queryable. Below is the public demo tenant — get your own with a curl."}
           </span>
         </div>
@@ -76,18 +76,15 @@ export function LandingStrip() {
 
 function CurlCard({ apiKey }: { apiKey: string }) {
   const [copied, setCopied] = useState(false);
-  const now = new Date().toISOString();
-  const curl = `curl -X POST http://localhost:8080/transactions \\
+  // Self-mode tenants start with zero accounts (the migration only
+  // backfilled demo's existing rows). The first useful curl is therefore
+  // an account spawn — it lands a new row visible in the agents pane via
+  // the 5s polling loop. Posting a transaction would 404 against the
+  // user's empty account list.
+  const curl = `curl -X POST http://localhost:8080/agents \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "description": "first tx",
-    "occurred_at": "${now}",
-    "entries": [
-      {"account": "cash",           "amount": 100, "currency": "INR", "direction": "in"},
-      {"account": "guest_payments", "amount": 100, "currency": "INR", "direction": "out"}
-    ]
-  }'`;
+  -d '{"name": "first-account", "currency": "USD"}'`;
 
   async function handleCopy() {
     try {
@@ -103,7 +100,7 @@ function CurlCard({ apiKey }: { apiKey: string }) {
     <div className="fixed right-4 top-12 z-30 w-[520px] border border-border bg-surface-1 p-3 shadow-lg">
       <div className="mb-2 flex items-center justify-between">
         <span className="num text-[10px] uppercase tracking-[0.14em] text-accent">
-          your first transaction
+          create your first account
         </span>
         <button
           type="button"

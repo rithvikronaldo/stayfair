@@ -5,7 +5,7 @@ import { animate, useMotionValue, useTransform, motion } from "motion/react";
 
 import { fmtMinor } from "@/lib/format";
 import { DUR, EASE } from "@/lib/motion";
-import type { AgentRow, FlashState } from "@/lib/store";
+import { useStore, type AgentRow, type FlashState } from "@/lib/store";
 
 export function TreasuryCenter({
   totalUsd,
@@ -21,12 +21,14 @@ export function TreasuryCenter({
     (acc, a) => acc + a.burnPerHr,
     0,
   );
+  const mode = useStore((s) => s.mode);
+  const isSelf = mode === "self";
 
   return (
     <div className="relative flex h-full flex-col px-8 pt-6">
       <div className="flex h-6 items-center gap-3">
         <span className="text-[11px] uppercase tracking-[0.12em] text-fg">
-          Ledger
+          {isSelf ? "Your ledger" : "Ledger"}
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -34,7 +36,7 @@ export function TreasuryCenter({
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
-          All accounts
+          {isSelf ? "Your accounts" : "All accounts"}
         </span>
         <span className="text-[11px] text-dim">·</span>
         <span className="num text-[11px] uppercase tracking-[0.12em] text-muted">
@@ -52,24 +54,39 @@ export function TreasuryCenter({
       <div className="mt-8 grid grid-cols-[auto_1fr_auto] items-end gap-8">
         <HeroNumber totalUsd={totalUsd} flash={flash} />
 
-        <SideStats
-          rows={[
-            { k: "Open", v: "186.62" },
-            { k: "High · 24h", v: "247.89" },
-            { k: "Low · 24h", v: "114.20" },
-            { k: "Volume", v: `${tx24h.toLocaleString()} tx` },
-            { k: "Burn rate", v: `$${burnPerHr.toFixed(2)} / hr` },
-            { k: "Runway", v: estRunway(totalUsd, burnPerHr) },
-          ]}
-        />
+        {/*
+          Self mode: hide the side stats and delta. Those values are
+          hardcoded demo placeholders (Open 186.62, ↑ +0.83 etc.) — they
+          read fine against demo data but look incoherent next to a $0.00
+          hero. An empty column keeps the grid layout stable.
+        */}
+        {isSelf ? (
+          <>
+            <div />
+            <div />
+          </>
+        ) : (
+          <>
+            <SideStats
+              rows={[
+                { k: "Open", v: "186.62" },
+                { k: "High · 24h", v: "247.89" },
+                { k: "Low · 24h", v: "114.20" },
+                { k: "Volume", v: `${tx24h.toLocaleString()} tx` },
+                { k: "Burn rate", v: `$${burnPerHr.toFixed(2)} / hr` },
+                { k: "Runway", v: estRunway(totalUsd, burnPerHr) },
+              ]}
+            />
 
-        <div className="flex flex-col items-end gap-1.5 pb-3">
-          <Delta value="+0.83" tone="up" sub="last tick" />
-          <SideRow k="Last hour" v="−1.65" tone="red" />
-          <SideRow k="vs Open" v="+12.04" tone="green" />
-          <SideRow k="band · 24h" v="3.4σ" />
-          <SideRow k="tick latency" v="214 ms" />
-        </div>
+            <div className="flex flex-col items-end gap-1.5 pb-3">
+              <Delta value="+0.83" tone="up" sub="last tick" />
+              <SideRow k="Last hour" v="−1.65" tone="red" />
+              <SideRow k="vs Open" v="+12.04" tone="green" />
+              <SideRow k="band · 24h" v="3.4σ" />
+              <SideRow k="tick latency" v="214 ms" />
+            </div>
+          </>
+        )}
       </div>
 
       <ChartPlaceholder />
