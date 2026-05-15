@@ -6,9 +6,9 @@ import { SignupDialog } from "@/components/signup-dialog";
 import { api, ApiError } from "@/lib/api";
 import { useApiKey, hydrateApiKey } from "@/lib/api-key";
 
-// Per-key dismiss flag — once the user closes the curl card for a given
-// API key, it stays dismissed across reloads. New signups (different key)
-// get the card again.
+// Per-key collapse flag — once the user collapses the curl card for a
+// given API key, it stays collapsed across reloads as a small chip in
+// the corner. New signups (different key) get the full card again.
 const DISMISS_KEY_PREFIX = "stayfair.curl_card_dismissed.";
 
 function isDismissed(apiKey: string): boolean {
@@ -71,24 +71,9 @@ export function LandingStrip() {
           <span className="text-[11px] text-dim">·</span>
           <span className="truncate text-[12px] text-muted">
             {signedIn
-              ? `Signed in as ${email || "you"} — your tenant view, polled every 5s. Try the API:`
+              ? `Signed in as ${email || "you"} — your tenant view, polled every 5s.`
               : "Multi-currency, double-entry, point-in-time-queryable. Below is the public demo tenant — get your own with a curl."}
           </span>
-          {signedIn && cardHidden && apiKey && (
-            <>
-              <span className="text-[11px] text-dim">·</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setDismissed(apiKey, false);
-                  setCardHidden(false);
-                }}
-                className="num text-[11px] uppercase tracking-[0.14em] text-accent hover:opacity-80"
-              >
-                Show curl
-              </button>
-            </>
-          )}
         </div>
 
         {signedIn ? (
@@ -110,14 +95,23 @@ export function LandingStrip() {
         )}
       </div>
 
-      {signedIn && apiKey && !cardHidden && (
-        <CurlCard
-          apiKey={apiKey}
-          onDismiss={() => {
-            setDismissed(apiKey, true);
-            setCardHidden(true);
-          }}
-        />
+      {signedIn && apiKey && (
+        cardHidden ? (
+          <CurlChip
+            onExpand={() => {
+              setDismissed(apiKey, false);
+              setCardHidden(false);
+            }}
+          />
+        ) : (
+          <CurlCard
+            apiKey={apiKey}
+            onDismiss={() => {
+              setDismissed(apiKey, true);
+              setCardHidden(true);
+            }}
+          />
+        )
       )}
 
       <SignupDialog open={open} onOpenChange={setOpen} />
@@ -181,5 +175,19 @@ function CurlCard({
         {curl}
       </pre>
     </div>
+  );
+}
+
+function CurlChip({ onExpand }: { onExpand: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      aria-label="Show curl"
+      className="num fixed right-4 top-12 z-30 flex items-center gap-2 border border-border bg-surface-1 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-accent shadow-lg hover:border-accent"
+    >
+      <span>curl</span>
+      <span className="text-muted">↓</span>
+    </button>
   );
 }
