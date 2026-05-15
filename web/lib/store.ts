@@ -63,6 +63,8 @@ export type TxRow = {
   meta?: string;
 };
 
+export type ViewMode = "demo" | "self";
+
 type State = {
   agents: AgentRow[];
   txs: TxRow[]; // newest first, max 30
@@ -72,11 +74,14 @@ type State = {
   totalFlashUntil: number;
   bootstrapped: boolean;
   connected: boolean;
+  mode: ViewMode;
 };
 
 type Actions = {
   setBootstrapped: (b: boolean) => void;
   setConnected: (b: boolean) => void;
+  setMode: (m: ViewMode) => void;
+  reset: () => void;
 
   initFromBackend: (
     agents: AgentSummary[],
@@ -138,9 +143,20 @@ export const useStore = create<State & Actions>()((set, get) => ({
   totalFlashUntil: 0,
   bootstrapped: false,
   connected: false,
+  mode: "demo",
 
   setBootstrapped: (b) => set({ bootstrapped: b }),
   setConnected: (b) => set({ connected: b }),
+  setMode: (m) => set({ mode: m }),
+  reset: () =>
+    set({
+      agents: [],
+      txs: [],
+      totalUsd: 0,
+      totalFlash: null,
+      totalFlashUntil: 0,
+      bootstrapped: false,
+    }),
 
   initFromBackend: (agents, balances) => {
     const rows: AgentRow[] = agents.map((a, i) => {

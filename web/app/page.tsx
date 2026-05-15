@@ -10,11 +10,13 @@ import { TransactionStream } from "@/components/transaction-stream";
 import { TreasuryCenter } from "@/components/treasury-center";
 import { useEventStream } from "@/lib/event-stream";
 import { useSpendDriver } from "@/lib/driver";
+import { useSelfModePolling } from "@/lib/self-mode";
 import { useStore } from "@/lib/store";
 
 export default function Home() {
-  useEventStream();
-  useSpendDriver();
+  useEventStream();      // SSE for demo mode; auto-skips in self mode
+  useSpendDriver();      // simulator for demo mode; auto-skips in self mode
+  useSelfModePolling();  // /agents + /balance polling for self mode; auto-skips in demo mode
 
   const agents = useStore((s) => s.agents);
   const txs = useStore((s) => s.txs);

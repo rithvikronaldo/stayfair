@@ -5,16 +5,17 @@ import { AnimatePresence, motion } from "motion/react";
 import { AgentCard } from "@/components/agent-card";
 import { SpawnAgentDialog } from "@/components/spawn-agent-dialog";
 import { DUR, EASE } from "@/lib/motion";
-import type { AgentRow } from "@/lib/store";
+import { useStore, type AgentRow } from "@/lib/store";
 
 export function AgentsPane({ agents }: { agents: AgentRow[] }) {
   const aliveCount = agents.filter((a) => a.status !== "killed").length;
+  const mode = useStore((s) => s.mode);
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-8 items-center justify-between border-b border-border px-4">
         <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
-          Accounts · {aliveCount} / {agents.length}
+          {mode === "self" ? "Your accounts" : "Accounts"} · {aliveCount} / {agents.length}
         </span>
         <span className="num text-[10px] tracking-[0.1em] text-dim">
           SORT · BAL ↓
@@ -23,8 +24,18 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
 
       <div className="flex-1 overflow-y-auto">
         {agents.length === 0 ? (
-          <div className="px-4 py-6 text-[11px] text-muted">
-            bootstrapping demo tenant…
+          <div className="px-4 py-6 text-[11px] leading-relaxed text-muted">
+            {mode === "self" ? (
+              <>
+                <div className="num mb-2 text-[10px] uppercase tracking-[0.12em] text-accent">
+                  your tenant — empty
+                </div>
+                Post your first transaction with the curl card above to see
+                it land here. Polls every 5s.
+              </>
+            ) : (
+              <>bootstrapping demo tenant…</>
+            )}
           </div>
         ) : (
           <AnimatePresence initial={false}>

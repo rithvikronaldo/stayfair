@@ -3,12 +3,13 @@
 import { AnimatePresence, motion } from "motion/react";
 
 import { fmtAge, fmtMinor } from "@/lib/format";
-import type { TxRow } from "@/lib/store";
+import { useStore, type TxRow } from "@/lib/store";
 import { DUR, EASE } from "@/lib/motion";
 
 export function TransactionStream({ txs }: { txs: TxRow[] }) {
   const nowMs = Date.now();
   const tps = txs.filter((t) => nowMs - t.ts < 1000).length;
+  const mode = useStore((s) => s.mode);
 
   return (
     <div className="flex h-full flex-col">
@@ -35,11 +36,21 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <AnimatePresence initial={false}>
-          {txs.map((tx) => (
-            <Row key={tx.id} tx={tx} />
-          ))}
-        </AnimatePresence>
+        {txs.length === 0 && mode === "self" ? (
+          <div className="px-4 py-6 text-[11px] leading-relaxed text-muted">
+            <div className="num mb-2 text-[10px] uppercase tracking-[0.12em] text-accent">
+              your stream — empty
+            </div>
+            Post a transaction with the curl card above and it'll appear
+            here within ~5s (polling, not live SSE — that ships W6).
+          </div>
+        ) : (
+          <AnimatePresence initial={false}>
+            {txs.map((tx) => (
+              <Row key={tx.id} tx={tx} />
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
       <div className="num flex h-7 items-center justify-between border-t border-border px-4 text-[10px] tracking-[0.1em] text-dim">

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { api, ApiError } from "@/lib/api";
+import { useApiKey } from "@/lib/api-key";
 import { useStore } from "@/lib/store";
 
 const DEMO_AGENTS: { name: string; currency: string; fundMinor: number }[] = [
@@ -31,7 +32,14 @@ function vendorPayee(currency: string): string {
 }
 
 export function useSpendDriver() {
+  const apiKey = useApiKey((s) => s.apiKey);
   useEffect(() => {
+    // Self mode (user signed in): pause the simulator entirely. The user
+    // creates their own activity via curl with their Bearer key. The
+    // simulator drives the demo tenant only; running it under the user's
+    // Bearer would 404 on demo account_codes.
+    if (apiKey) return;
+
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -170,7 +178,7 @@ export function useSpendDriver() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, []);
+  }, [apiKey]);
 }
 
 function sleep(ms: number): Promise<void> {

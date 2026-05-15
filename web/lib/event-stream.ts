@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { API_URL } from "@/lib/api";
 import type { Authorization, Agent, PostedTransaction } from "@/lib/api";
+import { useApiKey } from "@/lib/api-key";
 import { playTickIfUnmuted } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 
@@ -14,7 +15,14 @@ type EventEnvelope<T> = {
 };
 
 export function useEventStream() {
+  const apiKey = useApiKey((s) => s.apiKey);
   useEffect(() => {
+    // Self mode: skip SSE entirely. Backend events don't carry tenant_id
+    // yet (W6 carryover), so a connected stream would leak demo-tenant
+    // activity into the signed-in user's view. Self-mode UI uses polling
+    // instead — see useSelfModePolling.
+    if (apiKey) return;
+
     const setConnected = useStore.getState().setConnected;
     const apply = useStore.getState();
 
@@ -69,7 +77,7 @@ export function useEventStream() {
       es?.close();
       setConnected(false);
     };
-  }, []);
+  }, [apiKey]);
 }
 
 function parse<T>(raw: string): EventEnvelope<T> | null {
