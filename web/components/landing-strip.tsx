@@ -9,7 +9,7 @@ import { useApiKey, hydrateApiKey } from "@/lib/api-key";
 // Per-key collapse flag — once the user collapses the curl card for a
 // given API key, it stays collapsed across reloads as a small chip in
 // the corner. New signups (different key) get the full card again.
-const DISMISS_KEY_PREFIX = "stayfair.curl_card_dismissed.";
+const DISMISS_KEY_PREFIX = "acta.curl_card_dismissed.";
 
 function isDismissed(apiKey: string): boolean {
   if (typeof window === "undefined") return false;

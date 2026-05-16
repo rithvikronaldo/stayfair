@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rithvikronaldo/stayfair/internal/events"
-	"github.com/rithvikronaldo/stayfair/internal/ledger"
+	"github.com/rithvikronaldo/acta/internal/events"
+	"github.com/rithvikronaldo/acta/internal/ledger"
 )
 
 // authorizeRequest is the JSON shape accepted by POST /authorizations.

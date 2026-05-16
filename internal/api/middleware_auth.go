@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rithvikronaldo/stayfair/internal/ledger"
+	"github.com/rithvikronaldo/acta/internal/ledger"
 )
 
 // tenantIDLocal is the c.Locals() key the auth middleware writes and

@@ -2,8 +2,8 @@
 
 import { create } from "zustand";
 
-const STORAGE_KEY = "stayfair.api_key";
-const EMAIL_KEY = "stayfair.api_key.email";
+const STORAGE_KEY = "acta.api_key";
+const EMAIL_KEY = "acta.api_key.email";
 
 type State = {
   apiKey: string | null;

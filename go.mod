@@ -1,4 +1,4 @@
-module github.com/rithvikronaldo/stayfair
+module github.com/rithvikronaldo/acta
 
 go 1.25.6
 

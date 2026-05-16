@@ -5,7 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rithvikronaldo/stayfair/internal/events"
+	"github.com/rithvikronaldo/acta/internal/events"
 )
 
 const Version = "0.1.0"
@@ -14,7 +14,7 @@ const Version = "0.1.0"
 // ledger mutations out to /events/stream subscribers.
 func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 	app := fiber.New(fiber.Config{
-		AppName:               "stayfair",
+		AppName:               "acta",
 		DisableStartupMessage: true,
 		// SSE responses must stream — disable Fiber's default body buffering.
 		StreamRequestBody: true,

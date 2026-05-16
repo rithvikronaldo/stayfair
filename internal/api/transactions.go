@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rithvikronaldo/stayfair/internal/events"
-	"github.com/rithvikronaldo/stayfair/internal/ledger"
+	"github.com/rithvikronaldo/acta/internal/events"
+	"github.com/rithvikronaldo/acta/internal/ledger"
 )
 
 // demoOrgID is the sentinel org from testdata/seed.sql. Until we wire real

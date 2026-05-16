@@ -1,6 +1,6 @@
 # Design decisions
 
-This document captures the key choices behind the StayFair ledger — the
+This document captures the key choices behind the acta ledger — the
 non-obvious ones that would take a while to rediscover from reading the
 code alone. Each section explains what was chosen, why, and what the
 trade-off is.

@@ -7,7 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/rithvikronaldo/stayfair/internal/ledger"
+	"github.com/rithvikronaldo/acta/internal/ledger"
 )
 
 // signupRequest is the JSON shape accepted by POST /tenants. No password,

@@ -17,9 +17,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rithvikronaldo/stayfair/internal/config"
-	"github.com/rithvikronaldo/stayfair/internal/db"
-	"github.com/rithvikronaldo/stayfair/internal/ledger"
+	"github.com/rithvikronaldo/acta/internal/config"
+	"github.com/rithvikronaldo/acta/internal/db"
+	"github.com/rithvikronaldo/acta/internal/ledger"
 )
 
 const demoOrgID = "00000000-0000-0000-0000-000000000001"

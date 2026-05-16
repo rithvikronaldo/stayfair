@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-const STORAGE_KEY = "stayfair.sound.muted";
+const STORAGE_KEY = "acta.sound.muted";
 
 let ctx: AudioContext | null = null;
 

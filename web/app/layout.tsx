@@ -15,7 +15,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "StayFair — Ledger Sandbox",
+  title: "acta — Ledger Sandbox",
   description:
     "Multi-currency, double-entry, point-in-time-queryable ledger sandbox for backend engineers. Sign up, get an API key, post your first transaction with curl.",
 };

@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rithvikronaldo/stayfair/internal/api"
-	"github.com/rithvikronaldo/stayfair/internal/config"
-	"github.com/rithvikronaldo/stayfair/internal/db"
-	"github.com/rithvikronaldo/stayfair/internal/events"
+	"github.com/rithvikronaldo/acta/internal/api"
+	"github.com/rithvikronaldo/acta/internal/config"
+	"github.com/rithvikronaldo/acta/internal/db"
+	"github.com/rithvikronaldo/acta/internal/events"
 )
 
 func main() {

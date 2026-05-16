@@ -131,7 +131,7 @@ func IsDemoTenant(id uuid.UUID) bool {
 }
 
 // generateAPIKey returns a 32-byte cryptographically-random key encoded
-// as URL-safe base64 with a "sf_" prefix. ~46 chars total. Fits in an
+// as URL-safe base64 with an "ac_" prefix. ~46 chars total. Fits in an
 // Authorization header without escaping; prefix makes leaked keys easier
 // to grep for (a la GitHub's ghp_).
 func generateAPIKey() (string, error) {
@@ -139,11 +139,11 @@ func generateAPIKey() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return "sf_" + base64.RawURLEncoding.EncodeToString(b), nil
+	return "ac_" + base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // hashAPIKey returns hex(sha256(rawKey)). Migration 006 seeds the demo
-// tenant with hashAPIKey("stayfair-demo-public-key") — that hash is
+// tenant with hashAPIKey("acta-demo-public-key") — that hash is
 // reproducible in psql so the seed insert is self-contained.
 func hashAPIKey(rawKey string) string {
 	h := sha256.Sum256([]byte(rawKey))

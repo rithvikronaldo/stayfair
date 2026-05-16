@@ -1,6 +1,8 @@
-# StayFair
+# acta
 
 **A multi-currency, double-entry, point-in-time-queryable ledger sandbox for backend engineers.**
+
+*Latin for "things done." A ledger is a record of things done. Live at [acta.money](https://acta.money).*
 
 The ledger sandbox you wish existed when you were learning fintech backend. Sign up, get an API key, post your first transaction with curl, and watch it land in a real-time dashboard.
 

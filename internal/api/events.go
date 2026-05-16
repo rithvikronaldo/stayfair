@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 
-	"github.com/rithvikronaldo/stayfair/internal/events"
+	"github.com/rithvikronaldo/acta/internal/events"
 )
 
 // StreamEvents returns a Server-Sent Events handler that publishes ledger

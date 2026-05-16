@@ -32,7 +32,7 @@ export function TopBar({
       <Group>
         <div className="h-2 w-2 bg-accent" />
         <span className="text-[11px] font-semibold tracking-[0.18em] text-fg">
-          STAYFAIR
+          ACTA
         </span>
         <span className="text-[11px] uppercase tracking-[0.1em] text-muted">
           Ledger

@@ -1,20 +1,20 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: stayfair-postgres
+    container_name: acta-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: stayfair
+      POSTGRES_DB: acta
     ports:
       - "5433:5432"
     volumes:
-      - stayfair_pgdata:/var/lib/postgresql/data
+      - acta_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d stayfair"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d acta"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  stayfair_pgdata:
+  acta_pgdata:

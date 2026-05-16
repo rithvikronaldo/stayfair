@@ -24,7 +24,7 @@ CREATE TABLE tenants (
 -- read-only-public.
 INSERT INTO tenants (id, email, api_key_hash, name) VALUES (
     '00000000-0000-0000-0000-000000000010',
-    'demo@stayfair.local',
-    encode(sha256('stayfair-demo-public-key'::bytea), 'hex'),
+    'demo@acta.local',
+    encode(sha256('acta-demo-public-key'::bytea), 'hex'),
     'Demo Tenant'
 );
