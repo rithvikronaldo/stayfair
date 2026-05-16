@@ -24,9 +24,9 @@ Building notes at [rithvikronaldo.dev](https://rithvikronaldo.dev).
 | 1 (Apr 19–26) | Schema, balanced-entries trigger, `POST /transactions` | ✅ |
 | 2 | Multi-currency FX, point-in-time balance queries, snapshot+delta | ✅ |
 | 3 (May 4-10) | Authorize/capture lifecycle, SSE event stream, transaction list, agents schema | ✅ |
-| 4 (May 11-17) | Frontend dashboard ships; ledger-sandbox repositioning | 🚧 |
-| 5 (May 18-24) | Multi-tenancy: `tenants` table, API key auth, signup flow | 🔜 |
-| 6 (May 25-31) | `/docs`, deploy, launch | 🔜 |
+| 4 (May 4-10) | Frontend dashboard, SSE event stream, ledger-sandbox repositioning | ✅ |
+| 5 (May 11-17) | Multi-tenancy: `tenants` table, signup endpoint, API key auth, cross-tenant isolation tests, dashboard tenant-switch | ✅ |
+| 6 (May 18-24) | `/docs`, deploy to [acta.money](https://acta.money), launch | 🚧 |
 
 ## Run it locally
 
@@ -39,7 +39,7 @@ make db-up
 # 2. Apply schema migrations
 make migrate-up
 
-# 3. Load demo fixtures (1 tenant org, 4 currencies, 5 named accounts, treasury + vendor pools)
+# 3. Load demo fixtures (demo tenant, 4 currencies, 5 named accounts, treasury + vendor pools)
 make seed
 
 # 4. Run the API
