@@ -43,7 +43,7 @@ var (
 
 // SpawnAgent creates an agent and an asset-type account for it, atomically.
 // The account code is derived from the agent's UUID: agent_<8-char>_<currency>.
-// Returns ErrAgentExists if (orgID, name) already exists. Both the agent
+// Returns ErrAgentExists if (tenantID, name) already exists. Both the agent
 // row and the account row land under tenantID.
 func SpawnAgent(
 	ctx context.Context,
@@ -87,7 +87,7 @@ func SpawnAgent(
 	`, orgID, tenantID, name).Scan(&agent.ID, &agent.Status, &agent.CreatedAt)
 	if err != nil {
 		// 23505 is unique_violation
-		if strings.Contains(err.Error(), "agents_org_id_name_key") {
+		if strings.Contains(err.Error(), "agents_tenant_id_name_key") {
 			return nil, fmt.Errorf("%w: %q", ErrAgentExists, name)
 		}
 		return nil, fmt.Errorf("insert agent: %w", err)

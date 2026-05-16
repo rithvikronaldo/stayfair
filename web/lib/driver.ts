@@ -129,7 +129,7 @@ export function useSpendDriver() {
     }
 
     function loop() {
-      const delay = 1200 + Math.random() * 2400;
+      const delay = 400 + Math.random() * 800;
       timeoutId = setTimeout(async () => {
         if (cancelled) return;
         await tick();
