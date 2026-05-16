@@ -24,7 +24,7 @@ This week I turned it on.
 
 ## The schema, additive
 
-The instinct on a multi-tenancy migration is to bulldoze: rename `org_id` to `tenant_id`, foreign-key it to a fresh `tenants` table, drop the legacy column. Two-step deploy at minimum, irreversible by week's end.
+The default move on a multi-tenancy migration is rename-and-replace: rename `org_id` to `tenant_id`, foreign-key it to a fresh `tenants` table, drop the legacy column. Two-step deploy at minimum if you're cautious; harder to reverse once anything reads from the new column.
 
 I went additive instead.
 
@@ -63,7 +63,7 @@ Two tables don't get touched:
 - `entries` inherits scope through `transaction_id` — the join is enough.
 - `fx_rates` is global. Exchange rates aren't per-tenant.
 
-Five composite indexes — one per scoped table — keyed on `(tenant_id, <hot_filter>)`. Every hot query that used to filter on `org_id` now filters on `tenant_id`. The plans look the same.
+Five composite indexes — one per scoped table — keyed on `(tenant_id, <hot_filter>)`. Every hot query that used to filter on `org_id` now filters on `tenant_id` instead, and Postgres picks the new composite index. Same Index Scan shape in the plan; just a different key.
 
 ## The predicate, threaded
 
@@ -76,17 +76,17 @@ agents, err := ledger.ListAgents(ctx, pool, orgID)
 Now looks like this:
 
 ```go
-tenantID := authmw.TenantID(ctx)        // resolved by middleware
+tenantID := api.TenantID(c)             // resolved by middleware
 agents, err := ledger.ListAgents(ctx, pool, orgID, tenantID)
 ```
 
-The middleware does one job: pull the Bearer token off the `Authorization` header, hash it, look up the matching tenant, attach the id to the request context. Every downstream call carries it through as an explicit parameter. No globals, no thread-local magic, no "request-scoped" hacks — the tenant flows through function signatures.
+The middleware does one job: pull the Bearer token off the `Authorization` header, hash it, look up the matching tenant, and stash the id on the request context (`c.Locals("tenant_id", t.ID)` in Fiber). Every downstream call reads it back and passes it through as an explicit parameter — the tenant flows through function signatures rather than living somewhere implicit.
 
 The work isn't writing the predicate. The work is proving it can't be forgotten.
 
 ## The test that locks it in
 
-If the `tenant_id` predicate can be silently dropped on any one query path among twelve, multi-tenancy is a story, not a guarantee. The protection has to come from a test that fails when the predicate is missing.
+If the `tenant_id` predicate can be silently dropped on any one query path, multi-tenancy is a story, not a guarantee. The protection has to come from a test that fails when the predicate is missing.
 
 ```go
 func TestCrossTenantIsolation(t *testing.T) {
@@ -148,9 +148,9 @@ The alternative to threading `tenant_id` through every handler is Postgres RLS: 
 
 I considered it. Three reasons I went the other way.
 
-**Debugging `"why is this row missing"` gets harder, not easier.** With application-scoped predicates, the WHERE clause is right there in the SQL — `EXPLAIN` the query, read the plan, see the filter. With RLS, the predicate is invisible: Postgres rewrites the query at parse time. A test failure that says "expected 5 rows, got 0" leads you straight to the code with predicate scoping. With RLS, it leads to "did middleware set the session var?" or "is the policy correct?" — both of which require leaving the application's mental model and inspecting database state.
+**Debugging `"why is this row missing"` gets harder, not easier.** With application-scoped predicates, the WHERE clause is right there in the SQL — `EXPLAIN` the query, read the plan, see the filter. With RLS, the predicate is added behind the scenes during query planning. A test failure that says "expected 5 rows, got 0" leads you straight to the code with predicate scoping. With RLS, it sends you out of the application's mental model and into database state — "did middleware set the session var?", "is the policy correct?".
 
-**Every join becomes a policy decision.** Five scoped tables, plus the joins between them. Each join either needs its own policy or trusts the leaf tables to be enough. The leaf-only approach is fast but subtly wrong on certain shapes — a `SELECT` that joins through a non-scoped reference table can leak rows you didn't intend. The full-policy approach is correct but doubles the surface area to audit.
+**Every scoped table needs its own policy.** Five scoped tables means five policies to write, review, and audit — and the joins between them need careful thought about which side enforces the scope. One predicate threaded through function calls is fewer moving parts to keep correct than five policies plus their interaction.
 
 **The tests above work either way.** If I'd built RLS first, I'd still want `TestCrossTenantIsolation`. The test doesn't care how the predicate gets onto the query — only that the result is zero rows for tenant B. So the real question is: which mechanism is easier to verify, debug, and onboard a new engineer to?
 
@@ -160,9 +160,9 @@ Application-scoping wins on all three for me. One mental model — `tenant_id` i
 
 The signup flow does one thing visibly and one thing carefully.
 
-**Visibly:** a modal takes an email, posts to `/tenants/signup`, and hands the user back two things — a Bearer token to paste into the dashboard, and a runnable `curl` command pre-filled with their key. The card is dismissible; clicking the close button collapses it to a chip that re-expands with a "show curl" toggle. Letting users tuck it away after copying keeps the dashboard clean during the signup-then-explore flow.
+**Visibly:** a modal takes an email, posts to `POST /tenants`, and hands the user back two things — a Bearer token to paste into the dashboard, and a runnable `curl` command pre-filled with their key. The card is dismissible; clicking the close button collapses it to a chip that re-expands with a "show curl" toggle. Letting users tuck it away after copying keeps the dashboard clean during the signup-then-explore flow.
 
-**Carefully:** the raw API key is returned exactly once, in the signup response body. We never store the raw value — only its SHA-256 hash, in the `api_key_hash` column. The auth middleware hashes incoming Bearer tokens and looks up the tenant by hash. If the database leaks tomorrow, the keys are not directly usable.
+**Carefully:** the raw API key is returned exactly once, in the signup response body. I never store the raw value — only its SHA-256 hash, in the `api_key_hash` column. The auth middleware hashes incoming Bearer tokens and looks up the tenant by hash. If the database leaks tomorrow, the keys aren't directly usable.
 
 ```go
 func generateAPIKey() (string, error) {
@@ -170,17 +170,17 @@ func generateAPIKey() (string, error) {
     if _, err := rand.Read(b); err != nil {
         return "", err
     }
-    return "sf_" + base64.RawURLEncoding.EncodeToString(b), nil
+    return "ac_" + base64.RawURLEncoding.EncodeToString(b), nil
 }
 ```
 
-The `sf_` prefix is a GitHub-style convention: prefixed keys are greppable. Anyone scanning a public repo for `sf_...` can spot one in seconds, so leaked keys get caught faster and rotated. Unprefixed random keys hide in plain sight.
+The `ac_` prefix is a GitHub-style convention — `ghp_` for GitHub personal tokens, `sk_` for Stripe secret keys. The prefix makes leaked keys greppable: secret-scanning tools (and humans) can pattern-match `ac_...` in committed code and flag it for rotation.
 
 ## What landed this week
 
 - **`tenants` table** — id, email, api_key_hash, name, created_at
 - **Migration backfill** — every row in `accounts`, `transactions`, `authorizations`, `idempotency_keys`, `agents` scoped to a seeded "Demo Tenant" at a fixed UUID
-- **`POST /tenants/signup`** — creates a tenant, returns Bearer + curl card
+- **`POST /tenants`** — creates a tenant, returns Bearer + curl card
 - **`GET /tenants/me`** — returns the resolved tenant for the current request
 - **Auth middleware** — hashes incoming Bearer, looks up tenant, attaches id to context
 - **Dashboard tenant switch** — signed-in users see their own data, unsigned see the demo
