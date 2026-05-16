@@ -18,29 +18,27 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 5 accounts for the Airbnb-style marketplace scenario described in
 -- Rithvik-Ledger-Plain-English.html § 02. All in INR for now.
-INSERT INTO accounts (org_id, code, name, type, currency) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'cash',           'Cash on Hand',        'asset',     'INR'),
-    ('00000000-0000-0000-0000-000000000001', 'guest_payments', 'Guest Payments',      'asset',     'INR'),
-    ('00000000-0000-0000-0000-000000000001', 'host_payable',   'Host Payable',        'liability', 'INR'),
-    ('00000000-0000-0000-0000-000000000001', 'commission',     'Commission Revenue',  'revenue',   'INR'),
-    ('00000000-0000-0000-0000-000000000001', 'gst_payable',    'GST Payable',         'liability', 'INR'),
-    -- Vendor pool accounts — counterparty for agent-treasury demo spend. One
-    -- per supported currency. type=liability because the platform owes vendors
-    -- the captured amounts (mirrors how Stripe routes platform → connected
-    -- accounts). The demo spend driver authorizes from agent_<id>_<ccy> →
-    -- vendor_pool_<ccy> for each simulated LLM call.
-    ('00000000-0000-0000-0000-000000000001', 'vendor_pool_usd', 'Vendor Pool (USD)',  'liability', 'USD'),
-    ('00000000-0000-0000-0000-000000000001', 'vendor_pool_eur', 'Vendor Pool (EUR)',  'liability', 'EUR'),
-    ('00000000-0000-0000-0000-000000000001', 'vendor_pool_gbp', 'Vendor Pool (GBP)',  'liability', 'GBP'),
-    ('00000000-0000-0000-0000-000000000001', 'vendor_pool_inr', 'Vendor Pool (INR)',  'liability', 'INR'),
+-- tenant_id is the demo tenant UUID seeded by migration 006.
+INSERT INTO accounts (org_id, tenant_id, code, name, type, currency) VALUES
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'cash',           'Cash on Hand',        'asset',     'INR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'guest_payments', 'Guest Payments',      'asset',     'INR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'host_payable',   'Host Payable',        'liability', 'INR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'commission',     'Commission Revenue',  'revenue',   'INR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'gst_payable',    'GST Payable',         'liability', 'INR'),
+    -- Vendor pool accounts — counterparty for demo spend. One per supported
+    -- currency. type=liability because the platform owes vendors the captured
+    -- amounts (mirrors how Stripe routes platform → connected accounts).
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'vendor_pool_usd', 'Vendor Pool (USD)',  'liability', 'USD'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'vendor_pool_eur', 'Vendor Pool (EUR)',  'liability', 'EUR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'vendor_pool_gbp', 'Vendor Pool (GBP)',  'liability', 'GBP'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'vendor_pool_inr', 'Vendor Pool (INR)',  'liability', 'INR'),
     -- Treasury pool — the platform's own wallet. Bootstrap funds each spawned
-    -- agent from treasury_pool_<ccy>. Starts at 0 and goes negative as we
-    -- issue funding (semantically: platform draws on float). type=asset so
-    -- agent → vendor still feels like "money leaves the platform's books."
-    ('00000000-0000-0000-0000-000000000001', 'treasury_pool_usd', 'Treasury Pool (USD)', 'asset', 'USD'),
-    ('00000000-0000-0000-0000-000000000001', 'treasury_pool_eur', 'Treasury Pool (EUR)', 'asset', 'EUR'),
-    ('00000000-0000-0000-0000-000000000001', 'treasury_pool_gbp', 'Treasury Pool (GBP)', 'asset', 'GBP'),
-    ('00000000-0000-0000-0000-000000000001', 'treasury_pool_inr', 'Treasury Pool (INR)', 'asset', 'INR')
+    -- account from treasury_pool_<ccy>. Starts at 0 and goes negative as we
+    -- issue funding (semantically: platform draws on float). type=asset.
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_usd', 'Treasury Pool (USD)', 'asset', 'USD'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_eur', 'Treasury Pool (EUR)', 'asset', 'EUR'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_gbp', 'Treasury Pool (GBP)', 'asset', 'GBP'),
+    ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_inr', 'Treasury Pool (INR)', 'asset', 'INR')
 ON CONFLICT (org_id, code) DO NOTHING;
 
 -- Historical FX rates between the four supported currencies. Stored as
