@@ -15,9 +15,27 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "acta — Ledger Sandbox",
+  metadataBase: new URL("https://acta.money"),
+  title: {
+    default: "acta — Ledger Sandbox",
+    template: "%s — acta",
+  },
   description:
     "Multi-currency, double-entry, point-in-time-queryable ledger sandbox for backend engineers. Sign up, get an API key, post your first transaction with curl.",
+  openGraph: {
+    title: "acta — Ledger Sandbox",
+    description:
+      "A double-entry Postgres ledger you can sign up to. Multi-currency, point-in-time queryable, multi-tenant.",
+    url: "https://acta.money",
+    siteName: "acta",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "acta — Ledger Sandbox",
+    description:
+      "A double-entry Postgres ledger you can sign up to. Multi-currency, point-in-time queryable, multi-tenant.",
+  },
 };
 
 export default function RootLayout({

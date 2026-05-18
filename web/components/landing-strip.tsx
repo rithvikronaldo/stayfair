@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { SignupDialog } from "@/components/signup-dialog";
 import { api, ApiError } from "@/lib/api";
@@ -76,23 +77,31 @@ export function LandingStrip() {
           </span>
         </div>
 
-        {signedIn ? (
-          <button
-            type="button"
-            onClick={clear}
-            className="num shrink-0 border border-border px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-muted hover:text-fg"
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/docs"
+            className="num text-[11px] uppercase tracking-[0.14em] text-muted hover:text-fg"
           >
-            Sign out
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="num shrink-0 border border-accent bg-accent px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-bg hover:opacity-90"
-          >
-            Sign up for an API key →
-          </button>
-        )}
+            Docs
+          </Link>
+          {signedIn ? (
+            <button
+              type="button"
+              onClick={clear}
+              className="num border border-border px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-muted hover:text-fg"
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="num border border-accent bg-accent px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-bg hover:opacity-90"
+            >
+              Sign up for an API key →
+            </button>
+          )}
+        </div>
       </div>
 
       {signedIn && apiKey && (
