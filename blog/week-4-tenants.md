@@ -188,7 +188,7 @@ The `ac_` prefix is a GitHub-style convention — `ghp_` for GitHub personal tok
 
 ## Next Sunday
 
-Week 6 closes the build. After three Sundays of writing about a ledger you couldn't actually touch, next week it goes live: public docs, a runnable signup, an API key in 60 seconds at [acta.money](https://acta.money). The multi-tenancy work this week is what makes that possible — without per-tenant scoping, "public signup" is a synonym for "shared database."
+Week 6 closes the build. After three Sundays of writing about a ledger you couldn't actually touch, in two weeks it goes live: public docs, a runnable signup, an API key in 60 seconds. The multi-tenancy work this week is what makes that possible. Without per-tenant scoping, "public signup" is a synonym for "shared database."
 
 I'm posting one of these every Sunday until the 6 weeks are up. Subscribe if you want the next one.
 
