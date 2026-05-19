@@ -49,6 +49,17 @@ func PostTenant(pool *pgxpool.Pool) fiber.Handler {
 			})
 		}
 
+		// Populate the new tenant with starter data so the dashboard isn't
+		// empty after signup. Three accounts + a historical funding tx +
+		// a captured activity tx + a pending authorization for the user's
+		// first guided action.
+		if err := ledger.SeedNewTenant(c.Context(), pool, demoOrgID, tenant.ID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "seed_failed",
+				"message": err.Error(),
+			})
+		}
+
 		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 			"tenant":          tenant,
 			"api_key":         rawKey,

@@ -16,12 +16,16 @@ type EventEnvelope<T> = {
 
 export function useEventStream() {
   const apiKey = useApiKey((s) => s.apiKey);
+  const asOf = useStore((s) => s.asOf);
   useEffect(() => {
     // Self mode: skip SSE entirely. Backend events don't carry tenant_id
     // yet (W6 carryover), so a connected stream would leak demo-tenant
     // activity into the signed-in user's view. Self-mode UI uses polling
     // instead — see useSelfModePolling.
     if (apiKey) return;
+    // REPLAY mode: scrubber controls the view. New live events would
+    // fight the historical balances. Drop the connection until NOW.
+    if (asOf !== null) return;
 
     const setConnected = useStore.getState().setConnected;
     const apply = useStore.getState();
@@ -77,7 +81,7 @@ export function useEventStream() {
       es?.close();
       setConnected(false);
     };
-  }, [apiKey]);
+  }, [apiKey, asOf]);
 }
 
 function parse<T>(raw: string): EventEnvelope<T> | null {

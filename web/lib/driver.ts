@@ -33,12 +33,17 @@ function vendorPayee(currency: string): string {
 
 export function useSpendDriver() {
   const apiKey = useApiKey((s) => s.apiKey);
+  const asOf = useStore((s) => s.asOf);
   useEffect(() => {
     // Self mode (user signed in): pause the simulator entirely. The user
     // creates their own activity via curl with their Bearer key. The
     // simulator drives the demo tenant only; running it under the user's
     // Bearer would 404 on demo account_codes.
     if (apiKey) return;
+    // REPLAY mode: don't generate new activity while the scrubber is in
+    // the past — new transactions would land at NOW, polluting the
+    // historical view.
+    if (asOf !== null) return;
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -178,7 +183,7 @@ export function useSpendDriver() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [apiKey]);
+  }, [apiKey, asOf]);
 }
 
 function sleep(ms: number): Promise<void> {

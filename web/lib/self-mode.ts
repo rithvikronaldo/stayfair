@@ -18,6 +18,7 @@ import { useStore } from "@/lib/store";
 // flips, and either this hook or the SSE/driver hooks take over.
 export function useSelfModePolling() {
   const apiKey = useApiKey((s) => s.apiKey);
+  const asOf = useStore((s) => s.asOf);
 
   useEffect(() => {
     const setMode = useStore.getState().setMode;
@@ -29,6 +30,8 @@ export function useSelfModePolling() {
     setMode(apiKey ? "self" : "demo");
 
     if (!apiKey) return; // demo mode is handled by driver + SSE
+    // REPLAY: scrubber controls balances; pause polling until NOW.
+    if (asOf !== null) return;
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -68,5 +71,5 @@ export function useSelfModePolling() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [apiKey]);
+  }, [apiKey, asOf]);
 }

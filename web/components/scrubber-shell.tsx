@@ -1,55 +1,126 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { useStore } from "@/lib/store";
+
+// Preset offsets the scrubber jumps to. Discrete clicks (instead of a
+// continuous drag) for the W5 D2 ship — drag interactivity lands later.
+// Each entry: label visible in the scrubber, minutes back from NOW.
+const PRESETS: { label: string; minutesBack: number }[] = [
+  { label: "−1h", minutesBack: 60 },
+  { label: "−15m", minutesBack: 15 },
+  { label: "−5m", minutesBack: 5 },
+];
+
 export function ScrubberShell() {
+  const asOf = useStore((s) => s.asOf);
+  const setAsOf = useStore((s) => s.setAsOf);
+  const [now, setNow] = useState<Date | null>(null);
+
+  // Live clock for the LIVE/REPLAY indicator. Starts null so SSR + first
+  // client render match — the timestamp populates on mount.
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const isLive = asOf === null;
+
+  function jumpBack(minutesBack: number) {
+    setAsOf(new Date(Date.now() - minutesBack * 60 * 1000));
+  }
+  function snapToNow() {
+    setAsOf(null);
+  }
+
   return (
     <div className="flex h-20 items-center gap-4 border-t border-border bg-bg px-8">
-      <div className="flex h-8">
-        <button className="num flex h-8 w-8 items-center justify-center border border-border text-[11px] text-muted hover:text-fg">
-          ◀
-        </button>
-        <button className="num flex h-8 w-8 items-center justify-center border border-l-0 border-border text-[11px] text-muted hover:text-fg">
-          ▶
-        </button>
-      </div>
+      {/* Snap-to-NOW button — left side. Looks like the previous prev/next
+          but plays a different role: it's the "back to live" affordance. */}
+      <button
+        type="button"
+        onClick={snapToNow}
+        disabled={isLive}
+        className={`num flex h-8 items-center justify-center border border-border px-3 text-[11px] uppercase tracking-[0.14em] ${
+          isLive
+            ? "cursor-default text-dim"
+            : "text-accent hover:border-accent"
+        }`}
+      >
+        ▶ NOW
+      </button>
 
       <div className="relative flex-1 h-20">
+        {/* Baseline */}
         <div className="absolute left-0 right-0 top-1/2 h-px bg-border" />
 
+        {/* Neon line — fills from left up to the playhead. Length ∝
+            offset-from-now, clamped to the visible range (−1h). */}
         <div
           className="absolute left-0 top-1/2 h-0.5 -translate-y-1/2 mix-blend-difference"
           style={{
-            width: "100%",
+            width: playheadPosition(asOf) + "%",
             background:
               "linear-gradient(90deg, rgba(34,211,238,0.05), rgba(34,211,238,1))",
           }}
         />
 
-        {[0, 25, 33, 50, 58, 75, 83, 100].map((p, i) => (
-          <div
-            key={i}
-            className={`absolute top-1/2 -translate-y-1/2 ${
-              [33, 58, 83].includes(p) ? "h-2 w-px bg-accent" : "h-1 w-px bg-border"
-            }`}
-            style={{ left: `${p}%` }}
-          />
-        ))}
+        {/* Preset click-points. Each is a vertical hairline + clickable
+            invisible button overlaid. NOW is the rightmost mark. */}
+        {[
+          ...PRESETS.map((p) => ({
+            ...p,
+            pos: percentForMinutesBack(p.minutesBack),
+            kind: "preset" as const,
+          })),
+          { label: "NOW", minutesBack: 0, pos: 100, kind: "now" as const },
+        ].map((m) => {
+          const isSelected =
+            m.kind === "now"
+              ? isLive
+              : asOf !== null &&
+                Math.abs(
+                  asOf.getTime() -
+                    (Date.now() - m.minutesBack * 60 * 1000),
+                ) < 1000;
+          return (
+            <button
+              key={m.label}
+              type="button"
+              onClick={() =>
+                m.kind === "now" ? snapToNow() : jumpBack(m.minutesBack)
+              }
+              className="absolute top-0 -translate-x-1/2 h-full flex flex-col items-center justify-center gap-1"
+              style={{ left: `${m.pos}%` }}
+            >
+              <span
+                className={`block w-px ${
+                  isSelected ? "h-3 bg-accent" : "h-2 bg-border"
+                }`}
+              />
+              <span
+                className={`num text-[10px] tracking-[0.12em] ${
+                  isSelected
+                    ? m.kind === "now"
+                      ? "text-accent"
+                      : "text-fg"
+                    : "text-dim hover:text-muted"
+                }`}
+              >
+                {m.label}
+              </span>
+            </button>
+          );
+        })}
 
+        {/* Playhead. Sits at NOW (right edge) when live; jumps to the
+            selected preset position when in past. */}
         <div
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference"
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference transition-all duration-300"
           style={{
-            left: "99.4%",
-            width: 14,
-            height: 14,
-            borderRadius: 999,
-            border: "1px solid var(--neon)",
-            opacity: 0.35,
-          }}
-        />
-
-        <div
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference"
-          style={{
-            left: "100%",
+            left: `${playheadPosition(asOf)}%`,
             width: 14,
             height: 14,
             borderRadius: 999,
@@ -59,24 +130,51 @@ export function ScrubberShell() {
               "0 0 12px rgba(34,211,238,0.6), 0 0 0 4px rgba(10,10,11,0.8)",
           }}
         />
-
-        <div className="num pointer-events-none absolute bottom-2 left-0 right-0 flex justify-between text-[10px] tracking-[0.12em] text-dim">
-          <span>−24h</span>
-          <span>−18h</span>
-          <span>−12h</span>
-          <span>−06h</span>
-          <span className="text-accent">NOW</span>
-        </div>
       </div>
 
+      {/* Right-side status. LIVE · timestamp when at NOW; REPLAY · time
+          when in past. The text is keyed off the same state the rest of
+          the dashboard reads, so they stay in sync. */}
       <div className="num flex flex-col items-end">
-        <span className="text-[13px] tracking-[0.06em] text-accent">
-          LIVE · 1.0×
-        </span>
-        <span className="text-[10px] tracking-[0.1em] text-dim">
-          tick · 214 ms · lag 12 ms
-        </span>
+        {isLive ? (
+          <>
+            <span className="text-[13px] tracking-[0.06em] text-accent">
+              LIVE · 1.0×
+            </span>
+            <span className="text-[10px] tracking-[0.1em] text-dim">
+              {now ? formatClock(now) : "--:--:--"}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-[13px] tracking-[0.06em] text-neon">
+              REPLAY
+            </span>
+            <span className="text-[10px] tracking-[0.1em] text-muted">
+              {formatClock(asOf)}
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
+}
+
+// Playhead position as a percentage along the scrubber. NOW = 100%.
+// −1h = the left edge (0%). Linear in between, clamped.
+function playheadPosition(asOf: Date | null): number {
+  if (asOf === null) return 100;
+  const minutesBack = (Date.now() - asOf.getTime()) / 60000;
+  return Math.max(0, 100 - (minutesBack / 60) * 100);
+}
+
+function percentForMinutesBack(minutesBack: number): number {
+  return Math.max(0, 100 - (minutesBack / 60) * 100);
+}
+
+function formatClock(d: Date): string {
+  const hh = d.getUTCHours().toString().padStart(2, "0");
+  const mm = d.getUTCMinutes().toString().padStart(2, "0");
+  const ss = d.getUTCSeconds().toString().padStart(2, "0");
+  return `${hh}:${mm}:${ss} UTC`;
 }

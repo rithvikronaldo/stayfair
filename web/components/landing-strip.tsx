@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { SignupDialog } from "@/components/signup-dialog";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, API_URL } from "@/lib/api";
 import { useApiKey, hydrateApiKey } from "@/lib/api-key";
 
 // Per-key collapse flag — once the user collapses the curl card for a
@@ -141,7 +141,7 @@ function CurlCard({
   // an account spawn — it lands a new row visible in the agents pane via
   // the 5s polling loop. Posting a transaction would 404 against the
   // user's empty account list.
-  const curl = `curl -X POST http://localhost:8080/agents \\
+  const curl = `curl -X POST ${API_URL}/agents \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "first-account", "currency": "USD"}'`;

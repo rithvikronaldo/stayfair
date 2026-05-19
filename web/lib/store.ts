@@ -75,12 +75,18 @@ type State = {
   bootstrapped: boolean;
   connected: boolean;
   mode: ViewMode;
+  // Scrubber state. null = "NOW" (live). A Date = "viewing past state".
+  // When non-null, the dashboard pauses live updates and re-fetches
+  // balances at the selected timestamp, animating values to historical
+  // values. UI shows REPLAY indicator instead of LIVE.
+  asOf: Date | null;
 };
 
 type Actions = {
   setBootstrapped: (b: boolean) => void;
   setConnected: (b: boolean) => void;
   setMode: (m: ViewMode) => void;
+  setAsOf: (d: Date | null) => void;
   reset: () => void;
 
   initFromBackend: (
@@ -144,10 +150,12 @@ export const useStore = create<State & Actions>()((set, get) => ({
   bootstrapped: false,
   connected: false,
   mode: "demo",
+  asOf: null,
 
   setBootstrapped: (b) => set({ bootstrapped: b }),
   setConnected: (b) => set({ connected: b }),
   setMode: (m) => set({ mode: m }),
+  setAsOf: (d) => set({ asOf: d }),
   reset: () =>
     set({
       agents: [],
@@ -156,6 +164,7 @@ export const useStore = create<State & Actions>()((set, get) => ({
       totalFlash: null,
       totalFlashUntil: 0,
       bootstrapped: false,
+      asOf: null,
     }),
 
   initFromBackend: (agents, balances) => {
