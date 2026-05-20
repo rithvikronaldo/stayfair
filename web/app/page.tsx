@@ -8,6 +8,7 @@ import { ScrubberShell } from "@/components/scrubber-shell";
 import { TopBar } from "@/components/topbar";
 import { TransactionStream } from "@/components/transaction-stream";
 import { TreasuryCenter } from "@/components/treasury-center";
+import { WelcomeSidebar } from "@/components/welcome-sidebar";
 import { useEventStream } from "@/lib/event-stream";
 import { useSpendDriver } from "@/lib/driver";
 import { useScrubberRewind } from "@/lib/scrubber";
@@ -65,6 +66,8 @@ export default function Home() {
 
         <ScrubberShell />
       </div>
+
+      <WelcomeSidebar />
 
       <div className="vignette" />
     </div>
