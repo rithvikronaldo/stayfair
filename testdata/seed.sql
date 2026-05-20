@@ -39,7 +39,7 @@ INSERT INTO accounts (org_id, tenant_id, code, name, type, currency) VALUES
     ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_eur', 'Treasury Pool (EUR)', 'asset', 'EUR'),
     ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_gbp', 'Treasury Pool (GBP)', 'asset', 'GBP'),
     ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010', 'treasury_pool_inr', 'Treasury Pool (INR)', 'asset', 'INR')
-ON CONFLICT (org_id, code) DO NOTHING;
+ON CONFLICT (tenant_id, code) DO NOTHING;
 
 -- Historical FX rates between the four supported currencies. Stored as
 -- point-in-time observations: ledger.LookupRate picks the row with the
