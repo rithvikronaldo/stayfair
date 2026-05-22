@@ -10,6 +10,16 @@ import type {
   PostedTransaction,
 } from "@/lib/api";
 
+export type TimeSkipPhase =
+  | "idle"
+  | "rewinding"
+  | "buffering"
+  | "playing"
+  | "paused"
+  | "done";
+
+export type TimeSkipSpeed = 1 | 10 | 100 | 1000;
+
 export type FlashState = "up" | "down" | "hold" | null;
 
 const FX_TO_USD: Record<string, number> = {
@@ -80,6 +90,14 @@ type State = {
   // balances at the selected timestamp, animating values to historical
   // values. UI shows REPLAY indicator instead of LIVE.
   asOf: Date | null;
+
+  // Time Skip orchestrator state (W5 D5). idle = scrubber-controlled. The
+  // other phases are owned by useTimeSkip(), which drives playback once
+  // ▶ Replay is clicked. timeSkipCursor advances as the queue plays.
+  timeSkipPhase: TimeSkipPhase;
+  timeSkipSpeed: TimeSkipSpeed;
+  timeSkipCursor: number;
+  timeSkipTotal: number;
 };
 
 type Actions = {
@@ -102,6 +120,13 @@ type Actions = {
   applyAuthVoided: (authId: string) => void;
   setBalance: (accountCode: string, balance: Balance) => void;
   decayFlashes: () => void;
+
+  // Time Skip (W5 D5).
+  setTimeSkipPhase: (p: TimeSkipPhase) => void;
+  setTimeSkipSpeed: (s: TimeSkipSpeed) => void;
+  setTimeSkipCursor: (cursor: number, total: number) => void;
+  applyReplayEvent: (tx: PostedTransaction) => void;
+  clearReplayState: () => void;
 };
 
 const FLASH_MS = 900;
@@ -151,6 +176,10 @@ export const useStore = create<State & Actions>()((set, get) => ({
   connected: false,
   mode: "demo",
   asOf: null,
+  timeSkipPhase: "idle",
+  timeSkipSpeed: 10,
+  timeSkipCursor: 0,
+  timeSkipTotal: 0,
 
   setBootstrapped: (b) => set({ bootstrapped: b }),
   setConnected: (b) => set({ connected: b }),
@@ -165,6 +194,9 @@ export const useStore = create<State & Actions>()((set, get) => ({
       totalFlashUntil: 0,
       bootstrapped: false,
       asOf: null,
+      timeSkipPhase: "idle",
+      timeSkipCursor: 0,
+      timeSkipTotal: 0,
     }),
 
   initFromBackend: (agents, balances) => {
@@ -369,5 +401,93 @@ export const useStore = create<State & Actions>()((set, get) => ({
     const totalNext = totalFlash && now > totalFlashUntil ? null : totalFlash;
     if (totalNext !== totalFlash) mutated = true;
     if (mutated) set({ agents: next, totalFlash: totalNext });
+  },
+
+  setTimeSkipPhase: (p) => set({ timeSkipPhase: p }),
+  setTimeSkipSpeed: (s) => set({ timeSkipSpeed: s }),
+  setTimeSkipCursor: (cursor, total) =>
+    set({ timeSkipCursor: cursor, timeSkipTotal: total }),
+
+  // applyReplayEvent walks a historical PostedTransaction's entries and
+  // applies them as forward-direction balance deltas on the dashboard.
+  // Same shape as applyAuthCaptured but driven by a posted tx rather than
+  // an auth → capture pair, since the queue stores raw transactions.
+  applyReplayEvent: (tx) => {
+    const now = Date.now();
+    blockCounter += 1;
+
+    const entriesByAccount = new Map<string, PostedTransaction["entries"][number]>();
+    for (const e of tx.entries) entriesByAccount.set(e.account, e);
+
+    const agents = get().agents.map((a) => {
+      const entry = entriesByAccount.get(a.accountCode);
+      if (!entry) return a;
+      const delta = entry.direction === "in" ? entry.amount : -entry.amount;
+      const newBal = a.balance + delta;
+      return {
+        ...a,
+        balance: newBal,
+        available: a.available + delta,
+        history: pushHistory(a.history, newBal),
+        tx24h: a.tx24h + 1,
+        flash: (delta >= 0 ? "up" : "down") as FlashState,
+        flashUntil: now + FLASH_MS,
+        active: true,
+      };
+    });
+
+    const sourceEntry = tx.entries.find((e) => e.direction === "out");
+    const destEntry = tx.entries.find((e) => e.direction === "in");
+    let txs = get().txs;
+    if (sourceEntry && destEntry) {
+      const sourceAgent = get().agents.find(
+        (a) => a.accountCode === sourceEntry.account,
+      );
+      const row: TxRow = {
+        id: `tx-replay-${tx.id}`,
+        txId: tx.id,
+        agentCode: sourceAgent?.code ?? "?",
+        agentName: sourceAgent?.name ?? "agent",
+        agentAccountCode: sourceEntry.account,
+        vendor:
+          inferVendorFromDescription(tx.description) ||
+          vendorFromDest(destEntry.account),
+        amount: sourceEntry.amount,
+        capturedAmount: sourceEntry.amount,
+        currency: sourceEntry.currency,
+        symbol: SYMBOLS[sourceEntry.currency] ?? "$",
+        status: "captured",
+        hash: shortHash(tx.id),
+        block: blockCounter,
+        ts: new Date(tx.occurred_at).getTime(),
+        meta: "replay",
+      };
+      txs = [row, ...txs].slice(0, 30);
+    }
+
+    const totalUsd = recomputeTotal(agents);
+    const prev = get().totalUsd;
+    const totalFlash: FlashState =
+      totalUsd > prev ? "up" : totalUsd < prev ? "down" : null;
+
+    set({
+      agents,
+      txs,
+      block: blockCounter,
+      totalUsd,
+      totalFlash,
+      totalFlashUntil: now + FLASH_MS,
+    });
+  },
+
+  // clearReplayState wipes any replay-tagged txs and resets orchestrator
+  // state. Called on snap-to-NOW / new replay run.
+  clearReplayState: () => {
+    set({
+      txs: get().txs.filter((t) => t.meta !== "replay"),
+      timeSkipPhase: "idle",
+      timeSkipCursor: 0,
+      timeSkipTotal: 0,
+    });
   },
 }));

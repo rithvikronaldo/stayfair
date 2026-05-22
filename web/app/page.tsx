@@ -4,6 +4,7 @@ import { useEffect } from "react";
 
 import { AgentsPane } from "@/components/agents-pane";
 import { LandingStrip } from "@/components/landing-strip";
+import { ReplayBanner } from "@/components/replay-banner";
 import { ScrubberShell } from "@/components/scrubber-shell";
 import { TopBar } from "@/components/topbar";
 import { TransactionStream } from "@/components/transaction-stream";
@@ -15,26 +16,15 @@ import { useReplayQueue } from "@/lib/replay-queue";
 import { useScrubberRewind } from "@/lib/scrubber";
 import { useSelfModePolling } from "@/lib/self-mode";
 import { useStore } from "@/lib/store";
+import { useTimeSkip } from "@/lib/time-skip";
 
 export default function Home() {
   useEventStream();      // SSE for demo mode; auto-skips in self mode + REPLAY
   useSpendDriver();      // simulator for demo mode; auto-skips in self mode + REPLAY
   useSelfModePolling();  // /agents + /balance polling for self mode; auto-skips in demo + REPLAY
   useScrubberRewind();   // takes over balances when scrubber's asOf is non-null
-  const replay = useReplayQueue(); // engine 1: fetches event queue when asOf non-null
-
-  // Engine-1 visibility: log queue shape so we can verify the fetch from
-  // the browser console during W5 D4 smoke. Removed once The Time Skip
-  // (W5 D5) consumes the queue visually.
-  useEffect(() => {
-    if (replay.asOf) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[replay-queue] asOf=${replay.asOf.toISOString()} fetched ${replay.queue.length} events`,
-        replay.error ? replay.error : "",
-      );
-    }
-  }, [replay.asOf, replay.queue.length, replay.error]);
+  const replay = useReplayQueue(); // fetches event queue when asOf non-null
+  const timeSkip = useTimeSkip(replay); // orchestrates The Time Skip (W5 D5)
 
   const agents = useStore((s) => s.agents);
   const txs = useStore((s) => s.txs);
@@ -81,10 +71,11 @@ export default function Home() {
           </section>
         </main>
 
-        <ScrubberShell />
+        <ScrubberShell timeSkip={timeSkip} />
       </div>
 
       <WelcomeSidebar />
+      <ReplayBanner timeSkip={timeSkip} />
 
       {inReplay && <div className="replay-tint" />}
 
