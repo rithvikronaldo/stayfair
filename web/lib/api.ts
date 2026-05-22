@@ -94,6 +94,11 @@ export type PostedTransaction = {
   entries: PostedEntry[];
 };
 
+export type TransactionListPage = {
+  transactions: PostedTransaction[];
+  next_cursor?: string;
+};
+
 export type Tenant = {
   id: string;
   email: string;
@@ -155,6 +160,22 @@ export const api = {
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       body: JSON.stringify(input),
     }),
+  listTransactions: (opts?: {
+    from?: string;
+    to?: string;
+    account?: string;
+    limit?: number;
+    cursor?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (opts?.from) qs.set("from", opts.from);
+    if (opts?.to) qs.set("to", opts.to);
+    if (opts?.account) qs.set("account", opts.account);
+    if (opts?.limit != null) qs.set("limit", String(opts.limit));
+    if (opts?.cursor) qs.set("cursor", opts.cursor);
+    const q = qs.toString();
+    return request<TransactionListPage>(`/transactions${q ? `?${q}` : ""}`);
+  },
   signupTenant: (input: { email: string; name: string }) =>
     request<SignupResponse>("/tenants", {
       method: "POST",

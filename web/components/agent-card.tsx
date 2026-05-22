@@ -1,10 +1,14 @@
 "use client";
 
+import { useAnimatedNumber } from "@/lib/animated-number";
 import { fmtMinor } from "@/lib/format";
 import type { AgentRow } from "@/lib/store";
 
 export function AgentCard({ agent }: { agent: AgentRow }) {
-  const [whole, frac] = fmtMinor(agent.balance).split(".");
+  const animatedBalance = useAnimatedNumber(agent.balance);
+  const animatedAvailable = useAnimatedNumber(agent.available);
+  const animatedOnHold = useAnimatedNumber(agent.on_hold);
+  const [whole, frac] = fmtMinor(animatedBalance).split(".");
 
   const flashCls =
     agent.flash === "up"
@@ -57,8 +61,8 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
       <Sparkline values={agent.history} active={agent.active} />
 
       <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1">
-        <Cell k="Available" v={fmtMinor(agent.available)} />
-        <Cell k="On hold" v={fmtMinor(agent.on_hold)} accent={agent.on_hold > 0} />
+        <Cell k="Available" v={fmtMinor(animatedAvailable)} />
+        <Cell k="On hold" v={fmtMinor(animatedOnHold)} accent={agent.on_hold > 0} />
         <Cell k="Tx · 24h" v={agent.tx24h.toString()} />
         <Cell k="Burn / hr" v={agent.burnPerHr.toFixed(2)} />
       </div>

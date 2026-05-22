@@ -91,6 +91,28 @@ body {
   box-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
 }
 
+/* Mode visual signature (W5 D4). LIVE breathes; REPLAY is static + tinted.
+   The user should *feel* which mode they're in without reading text. */
+@keyframes live-breathe {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+.live-breathe {
+  animation: live-breathe 1.5s ease-in-out infinite;
+}
+
+/* Cool-wash overlay applied to the entire dashboard while in REPLAY. ~6%
+   sky-blue. Pointer-events disabled so it never blocks interaction. Sits
+   above content but below the vignette + welcome sidebar. */
+.replay-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: rgba(56, 189, 248, 0.06);
+  mix-blend-mode: screen;
+}
+
 /* Cinematic vignette — top-right and bottom-left corners only */
 .vignette {
   position: absolute;

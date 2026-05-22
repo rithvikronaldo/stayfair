@@ -11,6 +11,7 @@ import { TreasuryCenter } from "@/components/treasury-center";
 import { WelcomeSidebar } from "@/components/welcome-sidebar";
 import { useEventStream } from "@/lib/event-stream";
 import { useSpendDriver } from "@/lib/driver";
+import { useReplayQueue } from "@/lib/replay-queue";
 import { useScrubberRewind } from "@/lib/scrubber";
 import { useSelfModePolling } from "@/lib/self-mode";
 import { useStore } from "@/lib/store";
@@ -20,6 +21,20 @@ export default function Home() {
   useSpendDriver();      // simulator for demo mode; auto-skips in self mode + REPLAY
   useSelfModePolling();  // /agents + /balance polling for self mode; auto-skips in demo + REPLAY
   useScrubberRewind();   // takes over balances when scrubber's asOf is non-null
+  const replay = useReplayQueue(); // engine 1: fetches event queue when asOf non-null
+
+  // Engine-1 visibility: log queue shape so we can verify the fetch from
+  // the browser console during W5 D4 smoke. Removed once The Time Skip
+  // (W5 D5) consumes the queue visually.
+  useEffect(() => {
+    if (replay.asOf) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[replay-queue] asOf=${replay.asOf.toISOString()} fetched ${replay.queue.length} events`,
+        replay.error ? replay.error : "",
+      );
+    }
+  }, [replay.asOf, replay.queue.length, replay.error]);
 
   const agents = useStore((s) => s.agents);
   const txs = useStore((s) => s.txs);
@@ -34,6 +49,8 @@ export default function Home() {
   }, [decayFlashes]);
 
   const ccyCount = new Set(agents.map((a) => a.currency)).size;
+  const asOf = useStore((s) => s.asOf);
+  const inReplay = asOf !== null;
 
   return (
     <div className="relative h-dvh w-dvw overflow-hidden bg-bg text-fg">
@@ -68,6 +85,8 @@ export default function Home() {
       </div>
 
       <WelcomeSidebar />
+
+      {inReplay && <div className="replay-tint" />}
 
       <div className="vignette" />
     </div>
