@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 
 import { fmtAge, fmtMinor } from "@/lib/format";
 import { useStore, type TxRow } from "@/lib/store";
@@ -59,6 +60,19 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
       </div>
     </div>
   );
+}
+
+// copyTxId copies the full tx UUID (not the truncated hash) to the
+// clipboard and fires a sonner toast. Falls back gracefully when the
+// clipboard API is unavailable (older browsers / non-secure contexts).
+async function copyTxId(tx: TxRow) {
+  const id = tx.txId ?? tx.authId ?? tx.id;
+  try {
+    await navigator.clipboard.writeText(id);
+    toast.success("tx id copied", { description: id });
+  } catch {
+    toast.error("copy failed — clipboard unavailable");
+  }
 }
 
 function Row({ tx }: { tx: TxRow }) {
@@ -126,7 +140,15 @@ function Row({ tx }: { tx: TxRow }) {
           <span className="mx-1 text-dim">→</span> cp:{tx.vendor}
         </div>
         <div className="num mt-0.5 truncate text-[9px] tracking-wide text-dim">
-          {tx.hash} · block {tx.block.toLocaleString()}
+          <button
+            type="button"
+            onClick={() => copyTxId(tx)}
+            className="cursor-pointer hover:text-muted"
+            title="Copy transaction ID"
+          >
+            {tx.hash}
+          </button>{" "}
+          · block {tx.block.toLocaleString()}
         </div>
       </div>
 

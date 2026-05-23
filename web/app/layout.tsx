@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geist = Geist({
@@ -48,7 +49,23 @@ export default function RootLayout({
       lang="en"
       className={`${geist.variable} ${jetbrainsMono.variable} antialiased`}
     >
-      <body className="min-h-screen bg-bg text-fg">{children}</body>
+      <body className="min-h-screen bg-bg text-fg">
+        {children}
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+              color: "var(--fg)",
+              fontFamily: "var(--font-jetbrains)",
+              fontSize: "12px",
+              letterSpacing: "0.04em",
+            },
+          }}
+        />
+      </body>
     </html>
   );
 }

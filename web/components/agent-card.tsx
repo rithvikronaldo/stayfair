@@ -27,6 +27,16 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
           : ""
       }`}
     >
+      {/* Per-event row pulse (W5 D6). Keyed by flashUntil so each new flash
+          remounts and re-plays the 600ms yellow → transparent animation.
+          Pointer-events disabled so it never blocks card interaction. */}
+      {agent.flashUntil > 0 && (
+        <div
+          key={agent.flashUntil}
+          className="row-pulse absolute inset-0 pointer-events-none"
+        />
+      )}
+
       <div
         className="absolute right-4 top-4 h-1.5 w-1.5"
         style={{

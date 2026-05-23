@@ -101,6 +101,18 @@ body {
   animation: live-breathe 1.5s ease-in-out infinite;
 }
 
+/* Row-pulse (W5 D6). Per-event "I saw that one" beat fired on every replay
+   or live tx hit. Yellow → transparent across 600ms ease-out. Sits inside
+   the agent card as a pointer-events:none overlay; remounted per-event via
+   a React key so the animation plays once each time. */
+@keyframes row-pulse {
+  0%   { background: rgba(250, 204, 21, 0.14); }
+  100% { background: rgba(250, 204, 21, 0); }
+}
+.row-pulse {
+  animation: row-pulse 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Cool-wash overlay applied to the entire dashboard while in REPLAY. ~6%
    sky-blue. Pointer-events disabled so it never blocks interaction. Sits
    above content but below the vignette + welcome sidebar. */
