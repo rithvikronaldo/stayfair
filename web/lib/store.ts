@@ -8,6 +8,7 @@ import type {
   Authorization,
   Balance,
   PostedTransaction,
+  StressResult,
 } from "@/lib/api";
 
 export type TimeSkipPhase =
@@ -19,6 +20,8 @@ export type TimeSkipPhase =
   | "done";
 
 export type TimeSkipSpeed = 1 | 10 | 100 | 1000;
+
+export type StressPhase = "idle" | "running" | "done";
 
 export type FlashState = "up" | "down" | "hold" | null;
 
@@ -98,6 +101,12 @@ type State = {
   timeSkipSpeed: TimeSkipSpeed;
   timeSkipCursor: number;
   timeSkipTotal: number;
+
+  // Stress / Take-Off state (W5 D7). Drives the overlay chart.
+  stressPhase: StressPhase;
+  stressN: number;          // requested N for the in-flight run
+  stressStartedAt: number;  // wall-clock ms (Date.now()) when the run kicked off
+  stressResult: StressResult | null;
 };
 
 type Actions = {
@@ -127,6 +136,11 @@ type Actions = {
   setTimeSkipCursor: (cursor: number, total: number) => void;
   applyReplayEvent: (tx: PostedTransaction) => void;
   clearReplayState: () => void;
+
+  // Stress / Take-Off (W5 D7).
+  startStress: (n: number) => void;
+  completeStress: (result: StressResult) => void;
+  resetStress: () => void;
 };
 
 const FLASH_MS = 900;
@@ -180,6 +194,10 @@ export const useStore = create<State & Actions>()((set, get) => ({
   timeSkipSpeed: 10,
   timeSkipCursor: 0,
   timeSkipTotal: 0,
+  stressPhase: "idle",
+  stressN: 0,
+  stressStartedAt: 0,
+  stressResult: null,
 
   setBootstrapped: (b) => set({ bootstrapped: b }),
   setConnected: (b) => set({ connected: b }),
@@ -488,6 +506,26 @@ export const useStore = create<State & Actions>()((set, get) => ({
       timeSkipPhase: "idle",
       timeSkipCursor: 0,
       timeSkipTotal: 0,
+    });
+  },
+
+  startStress: (n) => {
+    set({
+      stressPhase: "running",
+      stressN: n,
+      stressStartedAt: Date.now(),
+      stressResult: null,
+    });
+  },
+  completeStress: (result) => {
+    set({ stressPhase: "done", stressResult: result });
+  },
+  resetStress: () => {
+    set({
+      stressPhase: "idle",
+      stressN: 0,
+      stressStartedAt: 0,
+      stressResult: null,
     });
   },
 }));

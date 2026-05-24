@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { SoundToggle } from "@/components/sound-toggle";
+import { useStore } from "@/lib/store";
+import { useStressRun, STRESS_DEFAULT_N } from "@/lib/stress";
 
 export function TopBar({
   agentCount,
@@ -60,6 +62,7 @@ export function TopBar({
       <div className="flex-1" />
 
       <Group>
+        <StressButton />
         <Pill tone="dim">
           <span className="h-1.5 w-1.5 bg-dim" />
           Replay · idle
@@ -86,6 +89,31 @@ export function TopBar({
         </IconBtn>
       </Group>
     </header>
+  );
+}
+
+function StressButton() {
+  const stress = useStressRun();
+  const phase = useStore((s) => s.stressPhase);
+  const running = phase === "running";
+  return (
+    <button
+      type="button"
+      onClick={() => stress.run(STRESS_DEFAULT_N)}
+      disabled={running}
+      title="Bulk-post 1,000 balanced transactions"
+      className={`num inline-flex h-6 items-center gap-2 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
+        running
+          ? "border-border text-dim cursor-default"
+          : "border-accent text-accent hover:bg-accent/10"
+      }`}
+    >
+      <span
+        className="h-1.5 w-1.5"
+        style={{ background: running ? "var(--dim)" : "var(--accent)" }}
+      />
+      {running ? "Stress · running" : "▶ Stress 1k"}
+    </button>
   );
 }
 

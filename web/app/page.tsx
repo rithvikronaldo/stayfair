@@ -6,6 +6,7 @@ import { AgentsPane } from "@/components/agents-pane";
 import { LandingStrip } from "@/components/landing-strip";
 import { ReplayBanner } from "@/components/replay-banner";
 import { ScrubberShell } from "@/components/scrubber-shell";
+import { TakeOffChart } from "@/components/take-off-chart";
 import { TopBar } from "@/components/topbar";
 import { TransactionStream } from "@/components/transaction-stream";
 import { TreasuryCenter } from "@/components/treasury-center";
@@ -76,6 +77,7 @@ export default function Home() {
 
       <WelcomeSidebar />
       <ReplayBanner timeSkip={timeSkip} />
+      <TakeOffChart />
 
       {inReplay && <div className="replay-tint" />}
 

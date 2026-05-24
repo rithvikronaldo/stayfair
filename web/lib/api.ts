@@ -112,6 +112,17 @@ export type SignupResponse = {
   api_key_warning: string;
 };
 
+export type StressResult = {
+  n_posted: number;
+  elapsed_ms: number;
+  tps_peak: number;
+  p99_commit_ms: number;
+  p50_commit_ms: number;
+  invariant_violations: number;
+  serialization_retries: number;
+  currency: string;
+};
+
 export const api = {
   spawnAgent: (input: { name: string; currency: string }) =>
     request<Agent>("/agents", {
@@ -182,6 +193,11 @@ export const api = {
       body: JSON.stringify(input),
     }),
   getMe: () => request<Tenant>("/tenants/me"),
+  stress: (n: number) =>
+    request<StressResult>("/stress", {
+      method: "POST",
+      body: JSON.stringify({ n }),
+    }),
 };
 
 export const SUPPORTED_CURRENCIES = ["USD", "EUR", "INR", "GBP"] as const;

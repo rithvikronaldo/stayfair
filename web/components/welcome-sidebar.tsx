@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 
 import { useApiKey } from "@/lib/api-key";
 import { DUR, EASE } from "@/lib/motion";
+import { useStressRun, STRESS_DEFAULT_N } from "@/lib/stress";
 
 // Welcome sidebar shell — W5 D3.
 // Buttons are intentionally inert; wiring lands W6 D1 (per project_launch_plan).
@@ -61,6 +62,7 @@ function writeState(s: State) {
 
 export function WelcomeSidebar() {
   const apiKey = useApiKey((s) => s.apiKey);
+  const stress = useStressRun();
   const [state, setState] = useState<State>("open");
   const [hydrated, setHydrated] = useState(false);
 
@@ -126,26 +128,34 @@ export function WelcomeSidebar() {
           </header>
 
           <ol className="space-y-2">
-            {STEPS.map((step) => (
-              <li key={step.num}>
-                <button
-                  type="button"
-                  className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2"
-                >
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono text-[10px] text-dim">
-                      {String(step.num).padStart(2, "0")}
-                    </span>
-                    <span className="text-sm font-medium text-fg">
-                      ▶ {step.title}
-                    </span>
-                  </div>
-                  <p className="mt-1 pl-6 text-xs leading-snug text-muted">
-                    {step.blurb}
-                  </p>
-                </button>
-              </li>
-            ))}
+            {STEPS.map((step) => {
+              // Step 2 fires the stress run; others remain shells until W6 D1.
+              const onClick =
+                step.num === 2
+                  ? () => stress.run(STRESS_DEFAULT_N)
+                  : undefined;
+              return (
+                <li key={step.num}>
+                  <button
+                    type="button"
+                    onClick={onClick}
+                    className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2"
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-[10px] text-dim">
+                        {String(step.num).padStart(2, "0")}
+                      </span>
+                      <span className="text-sm font-medium text-fg">
+                        ▶ {step.title}
+                      </span>
+                    </div>
+                    <p className="mt-1 pl-6 text-xs leading-snug text-muted">
+                      {step.blurb}
+                    </p>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
 
           <footer className="mt-3 flex justify-between border-t border-border-2 pt-3 text-xs text-muted">
