@@ -9,6 +9,7 @@ import { AxisBottom, AxisLeft } from "@visx/axis";
 
 import { useAnimatedNumber } from "@/lib/animated-number";
 import { DUR, EASE } from "@/lib/motion";
+import { playThudIfUnmuted, playWhooshIfUnmuted } from "@/lib/sound";
 import { useStore } from "@/lib/store";
 import { useStressRun } from "@/lib/stress";
 
@@ -53,6 +54,14 @@ export function TakeOffChart() {
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  // Sound integration points (W6 D1): rising whoosh on launch, thud on landing
+  // — paired with the invariant badge snapping green. No-ops while muted; cue
+  // tuning is W6 D2 per the launch plan.
+  useEffect(() => {
+    if (phase === "running") playWhooshIfUnmuted();
+    else if (phase === "done") playThudIfUnmuted();
   }, [phase]);
 
   const visible = phase !== "idle";
@@ -124,6 +133,9 @@ export function TakeOffChart() {
                   </span>
                   <span className="num text-[11px] tracking-[0.1em] text-dim">
                     n = {n.toLocaleString()}{isDone && result.currency ? ` · ${result.currency}` : ""}
+                    {isDone && result.serialization_retries > 0
+                      ? ` · ${result.serialization_retries.toLocaleString()} retries`
+                      : ""}
                   </span>
                 </div>
                 <button

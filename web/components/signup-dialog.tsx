@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 import { z } from "zod";
 
 import { api, ApiError } from "@/lib/api";
@@ -65,6 +66,15 @@ export function SignupDialog({
   const handleDone = () => {
     if (apiKey) {
       setApiKey(apiKey, keyEmail);
+      // The first-signup whisper — quiet, once, as the dashboard appears.
+      // Sets the tone: nothing here is mocked.
+      setTimeout(() => {
+        toast("This is a real Postgres instance", {
+          description:
+            "Every action posts a real, balanced double-entry transaction — no mocks.",
+          duration: 6000,
+        });
+      }, 700);
     }
     onOpenChange(false);
     onSignedIn?.();

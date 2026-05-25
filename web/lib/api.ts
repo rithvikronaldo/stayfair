@@ -151,6 +151,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  listAuthorizations: (opts?: { status?: Authorization["status"]; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (opts?.status) qs.set("status", opts.status);
+    if (opts?.limit != null) qs.set("limit", String(opts.limit));
+    const q = qs.toString();
+    return request<{ authorizations: Authorization[] }>(
+      `/authorizations${q ? `?${q}` : ""}`,
+    ).then((r) => r.authorizations);
+  },
   capture: (id: string, amount: number) =>
     request<{ authorization_id: string; transaction: PostedTransaction }>(
       `/authorizations/${encodeURIComponent(id)}/capture`,
@@ -193,10 +202,12 @@ export const api = {
       body: JSON.stringify(input),
     }),
   getMe: () => request<Tenant>("/tenants/me"),
-  stress: (n: number) =>
+  stress: (n: number, concurrency?: number) =>
     request<StressResult>("/stress", {
       method: "POST",
-      body: JSON.stringify({ n }),
+      body: JSON.stringify(
+        concurrency && concurrency > 1 ? { n, concurrency } : { n },
+      ),
     }),
 };
 

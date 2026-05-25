@@ -60,6 +60,30 @@ func PostAuthorization(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fibe
 	}
 }
 
+// GetAuthorizations handles GET /authorizations.
+//
+// Returns the tenant's authorizations newest-first. Optional ?status= filter
+// (pending|captured|voided|expired) and ?limit=. The guided new-user flow
+// calls this with ?status=pending to locate the seeded hold for The Catch.
+func GetAuthorizations(pool *pgxpool.Pool) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		status := c.Query("status")
+		limit := c.QueryInt("limit", 50)
+
+		auths, err := ledger.ListAuthorizations(
+			c.Context(), pool, demoOrgID, TenantID(c), status, limit,
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":   "list_authorizations_failed",
+				"message": err.Error(),
+			})
+		}
+
+		return c.JSON(fiber.Map{"authorizations": auths})
+	}
+}
+
 // PostCapture handles POST /authorizations/:id/capture.
 //
 // Settles a pending authorization by creating a balanced transaction for

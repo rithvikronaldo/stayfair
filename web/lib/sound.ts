@@ -47,6 +47,54 @@ export function tick(amplitude = 0.04) {
   o2.stop(t + 0.1);
 }
 
+// whoosh — a rising sweep for the Take-Off launch. The W6 D1 integration
+// point; W6 D2 may swap the synth for a recorded cue. Kept intentionally
+// short and low-amplitude so repeated stress runs don't fatigue.
+export function whoosh(amplitude = 0.05) {
+  const c = ensureContext();
+  if (!c) return;
+  const t = c.currentTime;
+  const dur = 0.5;
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.exponentialRampToValueAtTime(amplitude, t + 0.12);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  gain.connect(c.destination);
+
+  const o = c.createOscillator();
+  o.type = "sawtooth";
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(1400, t + dur);
+  o.connect(gain);
+
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+
+// thud — a short low landing tone when the run completes (paired with the
+// invariant badge snapping green). Also a W6 D1 integration point.
+export function thud(amplitude = 0.06) {
+  const c = ensureContext();
+  if (!c) return;
+  const t = c.currentTime;
+
+  const gain = c.createGain();
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.exponentialRampToValueAtTime(amplitude, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  gain.connect(c.destination);
+
+  const o = c.createOscillator();
+  o.type = "sine";
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.22);
+  o.connect(gain);
+
+  o.start(t);
+  o.stop(t + 0.24);
+}
+
 type SoundState = {
   muted: boolean;
   toggle: () => void;
@@ -98,4 +146,14 @@ if (typeof document !== "undefined") {
 export function playTickIfUnmuted() {
   if (useSound.getState().muted) return;
   tick();
+}
+
+export function playWhooshIfUnmuted() {
+  if (useSound.getState().muted) return;
+  whoosh();
+}
+
+export function playThudIfUnmuted() {
+  if (useSound.getState().muted) return;
+  thud();
 }

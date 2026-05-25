@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { CurlHint } from "@/components/curl-hint";
 import { SoundToggle } from "@/components/sound-toggle";
+import { useActionDialog } from "@/lib/action-dialog";
+import { API_URL } from "@/lib/api";
+import { useApiKey } from "@/lib/api-key";
+import { useCodeMode } from "@/lib/code-mode";
+import { useCommandPalette } from "@/lib/command-palette";
 import { useStore } from "@/lib/store";
 import { useStressRun, STRESS_DEFAULT_N } from "@/lib/stress";
 
@@ -62,6 +68,9 @@ export function TopBar({
       <div className="flex-1" />
 
       <Group>
+        <NewButton />
+        <CmdKButton />
+        <CodeModeToggle />
         <StressButton />
         <Pill tone="dim">
           <span className="h-1.5 w-1.5 bg-dim" />
@@ -94,25 +103,80 @@ export function TopBar({
 
 function StressButton() {
   const stress = useStressRun();
+  const apiKey = useApiKey((s) => s.apiKey);
   const phase = useStore((s) => s.stressPhase);
   const running = phase === "running";
+  const curl = `curl -X POST ${API_URL}/stress \\
+  -H "Authorization: Bearer ${apiKey ?? "<your_api_key>"}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"n": ${STRESS_DEFAULT_N}}'`;
+  return (
+    <CurlHint curl={curl}>
+      <button
+        type="button"
+        onClick={() => stress.run(STRESS_DEFAULT_N)}
+        disabled={running}
+        title="Bulk-post 1,000 balanced transactions"
+        className={`num inline-flex h-6 items-center gap-2 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
+          running
+            ? "border-border text-dim cursor-default"
+            : "border-accent text-accent hover:bg-accent/10"
+        }`}
+      >
+        <span
+          className="h-1.5 w-1.5"
+          style={{ background: running ? "var(--dim)" : "var(--accent)" }}
+        />
+        {running ? "Stress · running" : "▶ Stress 1k"}
+      </button>
+    </CurlHint>
+  );
+}
+
+function NewButton() {
+  const openDialog = useActionDialog((s) => s.openDialog);
   return (
     <button
       type="button"
-      onClick={() => stress.run(STRESS_DEFAULT_N)}
-      disabled={running}
-      title="Bulk-post 1,000 balanced transactions"
-      className={`num inline-flex h-6 items-center gap-2 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
-        running
-          ? "border-border text-dim cursor-default"
-          : "border-accent text-accent hover:bg-accent/10"
+      onClick={() => openDialog("post")}
+      title="Spawn an account or post a transaction"
+      className="num inline-flex h-6 items-center gap-1.5 border border-border px-2.5 text-[11px] uppercase tracking-[0.1em] text-muted hover:text-fg"
+    >
+      + New
+    </button>
+  );
+}
+
+function CodeModeToggle() {
+  const on = useCodeMode((s) => s.on);
+  const toggle = useCodeMode((s) => s.toggle);
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={on}
+      title="Code mode — reveal the curl behind each action"
+      className={`num inline-flex h-6 items-center gap-1.5 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
+        on
+          ? "border-accent text-accent"
+          : "border-border text-muted hover:text-fg"
       }`}
     >
-      <span
-        className="h-1.5 w-1.5"
-        style={{ background: running ? "var(--dim)" : "var(--accent)" }}
-      />
-      {running ? "Stress · running" : "▶ Stress 1k"}
+      {"</>"} Code
+    </button>
+  );
+}
+
+function CmdKButton() {
+  const setOpen = useCommandPalette((s) => s.setOpen);
+  return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      title="Command palette (⌘K)"
+      className="num inline-flex h-6 items-center gap-1.5 border border-border px-2 text-[11px] uppercase tracking-[0.1em] text-muted hover:text-fg"
+    >
+      <span>⌘K</span>
     </button>
   );
 }

@@ -3,12 +3,18 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { CurlReveal } from "@/components/curl-reveal";
 import { useApiKey } from "@/lib/api-key";
+import { useCaptureFlow } from "@/lib/capture";
 import { DUR, EASE } from "@/lib/motion";
 import { useStressRun, STRESS_DEFAULT_N } from "@/lib/stress";
+import type { UseTimeSkipApi } from "@/lib/time-skip";
 
-// Welcome sidebar shell — W5 D3.
-// Buttons are intentionally inert; wiring lands W6 D1 (per project_launch_plan).
+// Welcome sidebar — W5 D3 shell, wired to real actions W6 D1.
+// Each step button triggers the real action via the in-app handler (no curl
+// required): step 1 captures the seeded pending auth (The Catch), step 2 runs
+// the stress test (the Take-Off), step 3 replays the last 5 minutes (The Time
+// Skip), step 4 reveals the curl behind all three (the teaching layer).
 // Visible only when a user is signed in (apiKey present) and hasn't dismissed
 // the tour. Two states: open (full panel) and minimized (corner chip).
 
@@ -60,11 +66,15 @@ function writeState(s: State) {
   window.localStorage.setItem(STORAGE_KEY, s);
 }
 
-export function WelcomeSidebar() {
+export function WelcomeSidebar({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
   const apiKey = useApiKey((s) => s.apiKey);
   const stress = useStressRun();
+  const capture = useCaptureFlow();
   const [state, setState] = useState<State>("open");
   const [hydrated, setHydrated] = useState(false);
+  const [done, setDone] = useState<Set<number>>(new Set());
+  const [busyStep, setBusyStep] = useState<number | null>(null);
+  const [curlOpen, setCurlOpen] = useState(false);
 
   // Read localStorage after mount to avoid SSR/hydration mismatch.
   useEffect(() => {
@@ -72,7 +82,41 @@ export function WelcomeSidebar() {
     setHydrated(true);
   }, []);
 
-  if (!apiKey || !hydrated || state === "dismissed") return null;
+  const markDone = (num: number) =>
+    setDone((prev) => new Set(prev).add(num));
+
+  async function runStep(num: number) {
+    setBusyStep(num);
+    try {
+      switch (num) {
+        case 1: {
+          const ok = await capture.capturePending();
+          if (ok) markDone(1);
+          break;
+        }
+        case 2:
+          stress.run(STRESS_DEFAULT_N);
+          markDone(2);
+          break;
+        case 3:
+          timeSkip.replayLast(5);
+          markDone(3);
+          break;
+        case 4:
+          setCurlOpen(true);
+          markDone(4);
+          break;
+      }
+    } finally {
+      setBusyStep(null);
+    }
+  }
+
+  if (!apiKey || !hydrated || state === "dismissed") {
+    // Keep the curl modal mountable even when the panel is dismissed, in case
+    // it was opened from the chip flow; harmless no-op when closed.
+    return <CurlReveal open={curlOpen} onClose={() => setCurlOpen(false)} />;
+  }
 
   const minimize = () => {
     setState("minimized");
@@ -88,6 +132,7 @@ export function WelcomeSidebar() {
   };
 
   return (
+    <>
     <AnimatePresence mode="wait">
       {state === "open" ? (
         <motion.aside
@@ -129,24 +174,22 @@ export function WelcomeSidebar() {
 
           <ol className="space-y-2">
             {STEPS.map((step) => {
-              // Step 2 fires the stress run; others remain shells until W6 D1.
-              const onClick =
-                step.num === 2
-                  ? () => stress.run(STRESS_DEFAULT_N)
-                  : undefined;
+              const isDone = done.has(step.num);
+              const isBusy = busyStep === step.num;
               return (
                 <li key={step.num}>
                   <button
                     type="button"
-                    onClick={onClick}
-                    className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2"
+                    onClick={() => runStep(step.num)}
+                    disabled={isBusy}
+                    className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2 disabled:cursor-wait disabled:opacity-70"
                   >
                     <div className="flex items-baseline gap-2">
                       <span className="font-mono text-[10px] text-dim">
-                        {String(step.num).padStart(2, "0")}
+                        {isDone ? "✓" : String(step.num).padStart(2, "0")}
                       </span>
                       <span className="text-sm font-medium text-fg">
-                        ▶ {step.title}
+                        {isBusy ? "· · ·" : "▶"} {step.title}
                       </span>
                     </div>
                     <p className="mt-1 pl-6 text-xs leading-snug text-muted">
@@ -186,5 +229,7 @@ export function WelcomeSidebar() {
         </motion.button>
       )}
     </AnimatePresence>
+    <CurlReveal open={curlOpen} onClose={() => setCurlOpen(false)} />
+    </>
   );
 }

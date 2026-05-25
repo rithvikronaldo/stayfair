@@ -134,12 +134,12 @@ func Capture(
 	defer tx.Rollback(ctx)
 
 	var (
-		orgID, sourceID, destID    uuid.UUID
-		sourceCode, destCode       string
-		authAmount                 int64
-		currency, description      string
-		status                     AuthStatus
-		expiresAt                  time.Time
+		orgID, sourceID, destID uuid.UUID
+		sourceCode, destCode    string
+		authAmount              int64
+		currency, description   string
+		status                  AuthStatus
+		expiresAt               time.Time
 	)
 	// FOR UPDATE so two concurrent captures of the same auth can't both succeed.
 	// AND a.tenant_id = $2 enforces cross-tenant isolation — capturing another
@@ -277,6 +277,59 @@ func Void(ctx context.Context, pool *pgxpool.Pool, tenantID, authID uuid.UUID) e
 		return fmt.Errorf("void status check: %w", err)
 	}
 	return fmt.Errorf("%w: status=%s", ErrAuthNotPending, status)
+}
+
+// ListAuthorizations returns a tenant's authorizations newest-first, optionally
+// filtered to a single status (pass "" for all). Scoped by (orgID, tenantID) —
+// the same isolation boundary Capture enforces. Account UUIDs are joined back
+// to their codes so the dashboard renders source/dest without a follow-up call.
+//
+// limit is clamped to [1, 200]; 50 if zero. The guided-flow "capture the
+// pending auth" step calls this with status="pending" to find the seeded hold.
+func ListAuthorizations(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, tenantID uuid.UUID,
+	status string,
+	limit int,
+) ([]Authorization, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	rows, err := pool.Query(ctx, `
+		SELECT a.id, src.code, dst.code, a.amount, a.currency, a.status,
+		       COALESCE(a.description, ''), a.created_at, a.expires_at,
+		       a.captured_at, a.voided_at, a.captured_amount, a.transaction_id
+		FROM authorizations a
+		JOIN accounts src ON src.id = a.source_account_id
+		JOIN accounts dst ON dst.id = a.dest_account_id
+		WHERE a.org_id = $1 AND a.tenant_id = $2
+		  AND ($3 = '' OR a.status::text = $3)
+		ORDER BY a.created_at DESC
+		LIMIT $4
+	`, orgID, tenantID, status, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query authorizations: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]Authorization, 0, limit)
+	for rows.Next() {
+		var a Authorization
+		if err := rows.Scan(
+			&a.ID, &a.SourceAccount, &a.DestAccount, &a.Amount, &a.Currency,
+			&a.Status, &a.Description, &a.CreatedAt, &a.ExpiresAt,
+			&a.CapturedAt, &a.VoidedAt, &a.CapturedAmount, &a.TransactionID,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 func resolveAccountCurrency(

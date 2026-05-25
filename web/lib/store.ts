@@ -135,6 +135,7 @@ type Actions = {
   setTimeSkipSpeed: (s: TimeSkipSpeed) => void;
   setTimeSkipCursor: (cursor: number, total: number) => void;
   applyReplayEvent: (tx: PostedTransaction) => void;
+  applyPostedTransaction: (tx: PostedTransaction) => void;
   clearReplayState: () => void;
 
   // Stress / Take-Off (W5 D7).
@@ -323,40 +324,86 @@ export const useStore = create<State & Actions>()((set, get) => ({
     const now = Date.now();
     blockCounter += 1;
 
-    // The capture transaction has 2 entries: source (out) → dest (in).
+    // The capture transaction has 2 entries: source (out) → dest (in). Animate
+    // BOTH sides so The Catch reads as money moving — source ticks down and
+    // releases the hold, dest ticks up. Earlier this only moved the source,
+    // leaving the receiving card stale until the next poll.
     const sourceEntry = tx.entries.find((e) => e.direction === "out");
     if (!sourceEntry) return;
     const captured = sourceEntry.amount;
+    const entriesByAccount = new Map(tx.entries.map((e) => [e.account, e]));
 
     const agents = get().agents.map((a) => {
-      if (a.accountCode !== sourceEntry.account) return a;
-      const newBal = a.balance - captured;
+      const entry = entriesByAccount.get(a.accountCode);
+      if (!entry) return a;
+      const delta = entry.direction === "in" ? entry.amount : -entry.amount;
+      const newBal = a.balance + delta;
       return {
         ...a,
         balance: newBal,
-        on_hold: Math.max(0, a.on_hold - captured),
+        // Only the source account released a hold for this capture.
+        on_hold:
+          entry.direction === "out"
+            ? Math.max(0, a.on_hold - captured)
+            : a.on_hold,
+        available:
+          entry.direction === "in" ? a.available + entry.amount : a.available,
         history: pushHistory(a.history, newBal),
         tx24h: a.tx24h + 1,
-        flash: "down" as FlashState,
+        flash: (delta >= 0 ? "up" : "down") as FlashState,
         flashUntil: now + FLASH_MS,
         active: true,
       };
     });
 
-    const txs = get().txs.map((row) =>
-      row.authId === authId
-        ? {
-            ...row,
-            txId: tx.id,
-            status: "captured" as const,
-            capturedAmount: captured,
-            hash: shortHash(tx.id),
-            block: blockCounter,
-            ts: now,
-            meta: `tokens · ${(2 + Math.random() * 18).toFixed(1)}k`,
-          }
-        : row,
-    );
+    // Flip the matching pending row to captured. In demo mode that row exists
+    // (applyAuthCreated streamed it). In self mode the seeded auth was never
+    // streamed — polling only hydrates balances — so synthesize a captured row
+    // from the tx itself, otherwise The Catch would move balances but leave the
+    // transaction stream empty.
+    let matched = false;
+    const mappedTxs = get().txs.map((row) => {
+      if (row.authId !== authId) return row;
+      matched = true;
+      return {
+        ...row,
+        txId: tx.id,
+        status: "captured" as const,
+        capturedAmount: captured,
+        hash: shortHash(tx.id),
+        block: blockCounter,
+        ts: now,
+        meta: `tokens · ${(2 + Math.random() * 18).toFixed(1)}k`,
+      };
+    });
+    let txs = mappedTxs;
+    if (!matched) {
+      const destEntry = tx.entries.find((e) => e.direction === "in");
+      const sourceAgent = get().agents.find(
+        (a) => a.accountCode === sourceEntry.account,
+      );
+      const row: TxRow = {
+        id: `tx-${authId}`,
+        authId,
+        txId: tx.id,
+        agentCode: sourceAgent?.code ?? "?",
+        agentName: sourceAgent?.name ?? "agent",
+        agentAccountCode: sourceEntry.account,
+        vendor:
+          inferVendorFromDescription(tx.description) ||
+          (destEntry ? vendorFromDest(destEntry.account) : "pool"),
+        amount: captured,
+        capturedAmount: captured,
+        currency: sourceEntry.currency,
+        symbol: SYMBOLS[sourceEntry.currency] ?? "$",
+        status: "captured",
+        hash: shortHash(tx.id),
+        block: blockCounter,
+        ts: now,
+        meta: `tokens · ${(2 + Math.random() * 18).toFixed(1)}k`,
+      };
+      txs = [row, ...mappedTxs].slice(0, 30);
+    }
 
     const totalUsd = recomputeTotal(agents);
     const prev = get().totalUsd;
@@ -479,6 +526,79 @@ export const useStore = create<State & Actions>()((set, get) => ({
         block: blockCounter,
         ts: new Date(tx.occurred_at).getTime(),
         meta: "replay",
+      };
+      txs = [row, ...txs].slice(0, 30);
+    }
+
+    const totalUsd = recomputeTotal(agents);
+    const prev = get().totalUsd;
+    const totalFlash: FlashState =
+      totalUsd > prev ? "up" : totalUsd < prev ? "down" : null;
+
+    set({
+      agents,
+      txs,
+      block: blockCounter,
+      totalUsd,
+      totalFlash,
+      totalFlashUntil: now + FLASH_MS,
+    });
+  },
+
+  // applyPostedTransaction reflects a just-posted transaction immediately, the
+  // same way replay applies a historical one, but tagged as live (meta:"post")
+  // so clearReplayState never wipes it and the row reads as real activity. Used
+  // by the in-app "post transaction" form so the dashboard moves on submit
+  // rather than waiting for the 5s self-mode poll.
+  applyPostedTransaction: (tx) => {
+    const now = Date.now();
+    blockCounter += 1;
+
+    const entriesByAccount = new Map<string, PostedTransaction["entries"][number]>();
+    for (const e of tx.entries) entriesByAccount.set(e.account, e);
+
+    const agents = get().agents.map((a) => {
+      const entry = entriesByAccount.get(a.accountCode);
+      if (!entry) return a;
+      const delta = entry.direction === "in" ? entry.amount : -entry.amount;
+      const newBal = a.balance + delta;
+      return {
+        ...a,
+        balance: newBal,
+        available: a.available + delta,
+        history: pushHistory(a.history, newBal),
+        tx24h: a.tx24h + 1,
+        flash: (delta >= 0 ? "up" : "down") as FlashState,
+        flashUntil: now + FLASH_MS,
+        active: true,
+      };
+    });
+
+    const sourceEntry = tx.entries.find((e) => e.direction === "out");
+    const destEntry = tx.entries.find((e) => e.direction === "in");
+    let txs = get().txs;
+    if (sourceEntry && destEntry) {
+      const sourceAgent = get().agents.find(
+        (a) => a.accountCode === sourceEntry.account,
+      );
+      const row: TxRow = {
+        id: `tx-post-${tx.id}`,
+        txId: tx.id,
+        agentCode: sourceAgent?.code ?? "?",
+        agentName: sourceAgent?.name ?? "agent",
+        agentAccountCode: sourceEntry.account,
+        vendor:
+          inferVendorFromDescription(tx.description) ||
+          vendorFromDest(destEntry.account),
+        amount: sourceEntry.amount,
+        capturedAmount: sourceEntry.amount,
+        currency: sourceEntry.currency,
+        symbol: SYMBOLS[sourceEntry.currency] ?? "$",
+        status: "captured",
+        hash: shortHash(tx.id),
+        block: blockCounter,
+        ts: now,
+        meta: "post",
       };
       txs = [row, ...txs].slice(0, 30);
     }

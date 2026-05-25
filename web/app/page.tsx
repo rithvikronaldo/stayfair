@@ -2,7 +2,9 @@
 
 import { useEffect } from "react";
 
+import { ActionDialog } from "@/components/action-dialog";
 import { AgentsPane } from "@/components/agents-pane";
+import { CommandPalette } from "@/components/command-palette";
 import { LandingStrip } from "@/components/landing-strip";
 import { ReplayBanner } from "@/components/replay-banner";
 import { ScrubberShell } from "@/components/scrubber-shell";
@@ -15,7 +17,10 @@ import { useEventStream } from "@/lib/event-stream";
 import { useSpendDriver } from "@/lib/driver";
 import { useReplayQueue } from "@/lib/replay-queue";
 import { useScrubberRewind } from "@/lib/scrubber";
+import { hydrateCodeMode } from "@/lib/code-mode";
+import { useFirstTick } from "@/lib/first-tick";
 import { useSelfModePolling } from "@/lib/self-mode";
+import { useKeyboardShortcuts } from "@/lib/shortcuts";
 import { useStore } from "@/lib/store";
 import { useTimeSkip } from "@/lib/time-skip";
 
@@ -23,9 +28,11 @@ export default function Home() {
   useEventStream();      // SSE for demo mode; auto-skips in self mode + REPLAY
   useSpendDriver();      // simulator for demo mode; auto-skips in self mode + REPLAY
   useSelfModePolling();  // /agents + /balance polling for self mode; auto-skips in demo + REPLAY
+  useFirstTick();        // The First Tick — keeps a new tenant alive for its first 5 min
   useScrubberRewind();   // takes over balances when scrubber's asOf is non-null
   const replay = useReplayQueue(); // fetches event queue when asOf non-null
   const timeSkip = useTimeSkip(replay); // orchestrates The Time Skip (W5 D5)
+  useKeyboardShortcuts(timeSkip); // R=replay, S=stress, ?=palette, ⌘K=palette
 
   const agents = useStore((s) => s.agents);
   const txs = useStore((s) => s.txs);
@@ -38,6 +45,10 @@ export default function Home() {
     const id = setInterval(decayFlashes, 200);
     return () => clearInterval(id);
   }, [decayFlashes]);
+
+  useEffect(() => {
+    hydrateCodeMode();
+  }, []);
 
   const ccyCount = new Set(agents.map((a) => a.currency)).size;
   const asOf = useStore((s) => s.asOf);
@@ -75,9 +86,11 @@ export default function Home() {
         <ScrubberShell timeSkip={timeSkip} />
       </div>
 
-      <WelcomeSidebar />
+      <WelcomeSidebar timeSkip={timeSkip} />
       <ReplayBanner timeSkip={timeSkip} />
       <TakeOffChart />
+      <CommandPalette timeSkip={timeSkip} />
+      <ActionDialog />
 
       {inReplay && <div className="replay-tint" />}
 

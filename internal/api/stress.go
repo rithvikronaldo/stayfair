@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -28,19 +29,30 @@ import (
 // field for the dashboard to display, not as a calculated metric.
 //
 // Isolation: each Post opens its own pgx transaction at the pool's default
-// isolation (read-committed). Sequential loop means no inter-tx contention
-// to worry about for the MVP. Upgrading to concurrent SERIALIZABLE goroutines
-// for true contention measurements is W6 D1 polish work — the headline
-// blog numbers come from this sequential run first.
+// isolation (read-committed). The default run is sequential (concurrency = 1)
+// — that's the path the headline blog numbers (582/518/325 tps across
+// 1k/5k/10k) were measured on, and it stays byte-for-byte unchanged. Passing
+// "concurrency" > 1 fans the N posts across that many goroutines, each on its
+// own pooled connection, to push throughput toward the 10k-tps target and
+// surface real serialization-retry rates under contention. Per-tx 40001
+// failures are retried (cap stressMaxRetries) and, if still contended, the tx
+// is skipped — so n_posted may trail the requested N rather than failing the
+// whole run.
+//
+// NOTE (W6 D1, DB-blocked): the concurrent path compiles and preserves the
+// sequential default, but its actual tps/retry numbers are unmeasured until
+// local Postgres is reachable. Measure before quoting concurrent figures.
 
 const (
-	stressMaxN       = 10_000
-	stressDefaultN   = 1_000
-	stressMaxRetries = 3
+	stressMaxN           = 10_000
+	stressDefaultN       = 1_000
+	stressMaxRetries     = 3
+	stressMaxConcurrency = 64
 )
 
 type stressRequest struct {
-	N int `json:"n"`
+	N           int `json:"n"`
+	Concurrency int `json:"concurrency"`
 }
 
 type stressResponse struct {
@@ -61,10 +73,16 @@ func PostStress(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handl
 		ctx := c.Context()
 
 		n := stressDefaultN
+		concurrency := 1
 		if len(c.Body()) > 0 {
 			var req stressRequest
-			if err := json.Unmarshal(c.Body(), &req); err == nil && req.N > 0 {
-				n = req.N
+			if err := json.Unmarshal(c.Body(), &req); err == nil {
+				if req.N > 0 {
+					n = req.N
+				}
+				if req.Concurrency > 0 {
+					concurrency = req.Concurrency
+				}
 			}
 		}
 		if qn := c.Query("n"); qn != "" {
@@ -72,8 +90,19 @@ func PostStress(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handl
 				n = parsed
 			}
 		}
+		if qc := c.Query("concurrency"); qc != "" {
+			if parsed, err := strconv.Atoi(qc); err == nil && parsed > 0 {
+				concurrency = parsed
+			}
+		}
 		if n > stressMaxN {
 			n = stressMaxN
+		}
+		if concurrency > stressMaxConcurrency {
+			concurrency = stressMaxConcurrency
+		}
+		if concurrency > n {
+			concurrency = n
 		}
 
 		tenantID := TenantID(c)
@@ -106,68 +135,21 @@ func PostStress(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handl
 			})
 		}
 
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		latencies := make([]time.Duration, 0, n)
-		retries := 0
-		nPosted := 0
-
 		runStart := time.Now()
-
-		for i := range n {
-			ai := rng.Intn(len(codes))
-			bi := rng.Intn(len(codes) - 1)
-			if bi >= ai {
-				bi++
-			}
-			from := codes[ai]
-			to := codes[bi]
-
-			// Amounts in [100, 10_100) minor units — readable but not so
-			// uniform that the dashboard looks fake.
-			amount := int64(100) + rng.Int63n(10_000)
-			occurredAt := time.Now().UTC()
-
-			tx := ledger.Transaction{
-				Description: fmt.Sprintf("stress synthetic %d", i),
-				OccurredAt:  occurredAt,
-				Entries: []ledger.Entry{
-					{Account: from, Amount: amount, Currency: usableCcy, Direction: ledger.DirOut},
-					{Account: to, Amount: amount, Currency: usableCcy, Direction: ledger.DirIn},
-				},
-			}
-
-			var postErr error
-			for range stressMaxRetries {
-				postStart := time.Now()
-				_, err := ledger.Post(ctx, pool, demoOrgID, tenantID, tx)
-				postEnd := time.Now()
-				if err == nil {
-					latencies = append(latencies, postEnd.Sub(postStart))
-					nPosted++
-					postErr = nil
-					break
-				}
-				// Retry on Postgres serialization failure (40001). Other errors
-				// are terminal — return immediately with whatever we got.
-				var pgErr *pgconn.PgError
-				if errors.As(err, &pgErr) && pgErr.Code == "40001" {
-					retries++
-					continue
-				}
-				postErr = err
-				break
-			}
-			if postErr != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error":                "stress_post_failed",
-					"message":              postErr.Error(),
-					"i":                    i,
-					"n_posted_before_fail": nPosted,
-				})
-			}
+		agg := runStress(ctx, pool, demoOrgID, tenantID, codes, usableCcy, n, concurrency)
+		if agg.termErr != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":                "stress_post_failed",
+				"message":              agg.termErr.Error(),
+				"i":                    agg.termI,
+				"n_posted_before_fail": agg.nPosted,
+			})
 		}
 
 		elapsed := time.Since(runStart)
+		latencies := agg.latencies
+		retries := agg.retries
+		nPosted := agg.nPosted
 		slices.Sort(latencies)
 
 		tps := 0.0
@@ -192,6 +174,143 @@ func PostStress(pool *pgxpool.Pool, broadcaster *events.Broadcaster) fiber.Handl
 
 		return c.JSON(resp)
 	}
+}
+
+// stressAgg accumulates the outcome of a stress run — merged across workers in
+// the concurrent path, used directly in the sequential one.
+type stressAgg struct {
+	latencies []time.Duration
+	retries   int
+	nPosted   int
+	termErr   error // first terminal (non-40001) error encountered, if any
+	termI     int   // index that produced termErr
+}
+
+// runStress posts n balanced synthetic transactions across the given account
+// codes. concurrency <= 1 runs the proven sequential loop; > 1 fans the work
+// across that many goroutines (each on its own pooled connection) and merges
+// their results. Index i is partitioned round-robin so workers don't collide
+// on the same i, and each worker seeds its own rng.
+func runStress(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, tenantID uuid.UUID,
+	codes []string,
+	ccy string,
+	n, concurrency int,
+) stressAgg {
+	if concurrency <= 1 {
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		var agg stressAgg
+		agg.latencies = make([]time.Duration, 0, n)
+		for i := range n {
+			runStressOne(ctx, pool, orgID, tenantID, codes, ccy, rng, i, &agg)
+			if agg.termErr != nil {
+				return agg
+			}
+		}
+		return agg
+	}
+
+	// Concurrent path. Each worker handles indices w, w+W, w+2W, … and writes
+	// to its own slot, so no shared-state locking is needed during the run.
+	// A terminal error on any worker cancels the rest.
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	results := make([]stressAgg, concurrency)
+	var wg sync.WaitGroup
+	for w := range concurrency {
+		wg.Add(1)
+		go func(w int) {
+			defer wg.Done()
+			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(w)*7919))
+			agg := &results[w]
+			for i := w; i < n; i += concurrency {
+				if runCtx.Err() != nil {
+					return
+				}
+				runStressOne(runCtx, pool, orgID, tenantID, codes, ccy, rng, i, agg)
+				if agg.termErr != nil {
+					cancel()
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	var merged stressAgg
+	for i := range results {
+		r := &results[i]
+		merged.latencies = append(merged.latencies, r.latencies...)
+		merged.retries += r.retries
+		merged.nPosted += r.nPosted
+		if r.termErr != nil && merged.termErr == nil {
+			merged.termErr = r.termErr
+			merged.termI = r.termI
+		}
+	}
+	return merged
+}
+
+// runStressOne posts a single synthetic transaction with serialization-retry,
+// recording the outcome into agg. A 40001 contention failure that survives
+// stressMaxRetries is skipped (not counted in nPosted, no terminal error). A
+// context cancellation (a sibling worker failed) is silently dropped. Any
+// other error is recorded as terminal.
+func runStressOne(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	orgID, tenantID uuid.UUID,
+	codes []string,
+	ccy string,
+	rng *rand.Rand,
+	i int,
+	agg *stressAgg,
+) {
+	ai := rng.Intn(len(codes))
+	bi := rng.Intn(len(codes) - 1)
+	if bi >= ai {
+		bi++
+	}
+
+	// Amounts in [100, 10_100) minor units — readable but not so uniform that
+	// the dashboard looks fake.
+	amount := int64(100) + rng.Int63n(10_000)
+	tx := ledger.Transaction{
+		Description: fmt.Sprintf("stress synthetic %d", i),
+		OccurredAt:  time.Now().UTC(),
+		Entries: []ledger.Entry{
+			{Account: codes[ai], Amount: amount, Currency: ccy, Direction: ledger.DirOut},
+			{Account: codes[bi], Amount: amount, Currency: ccy, Direction: ledger.DirIn},
+		},
+	}
+
+	for range stressMaxRetries {
+		start := time.Now()
+		_, err := ledger.Post(ctx, pool, orgID, tenantID, tx)
+		if err == nil {
+			agg.latencies = append(agg.latencies, time.Since(start))
+			agg.nPosted++
+			return
+		}
+		// Sibling worker already failed and cancelled us — bow out quietly.
+		if ctx.Err() != nil {
+			return
+		}
+		// Retry on Postgres serialization failure (40001); everything else is
+		// terminal.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "40001" {
+			agg.retries++
+			continue
+		}
+		agg.termErr = err
+		agg.termI = i
+		return
+	}
+	// 40001 retries exhausted — skip this tx, leave n_posted short.
 }
 
 type stressAccount struct{ code, currency string }
