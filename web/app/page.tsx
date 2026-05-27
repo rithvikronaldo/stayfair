@@ -65,8 +65,8 @@ export default function Home() {
           block={block}
         />
 
-        <main className="grid grid-cols-[280px_1fr_360px] overflow-hidden">
-          <section className="border-r border-border">
+        <main className="grid grid-rows-[minmax(0,1fr)] grid-cols-[280px_1fr_360px] overflow-hidden">
+          <section className="overflow-hidden border-r border-border">
             <AgentsPane agents={agents} />
           </section>
 
@@ -78,7 +78,7 @@ export default function Home() {
             />
           </section>
 
-          <section className="border-l border-border">
+          <section className="overflow-hidden border-l border-border">
             <TransactionStream txs={txs} />
           </section>
         </main>
@@ -88,7 +88,7 @@ export default function Home() {
 
       <WelcomeSidebar timeSkip={timeSkip} />
       <ReplayBanner timeSkip={timeSkip} />
-      <TakeOffChart />
+      <TakeOffChart timeSkip={timeSkip} />
       <CommandPalette timeSkip={timeSkip} />
       <ActionDialog />
 

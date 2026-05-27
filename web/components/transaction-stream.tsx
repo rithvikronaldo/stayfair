@@ -36,14 +36,16 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {txs.length === 0 && mode === "self" ? (
           <div className="px-4 py-6 text-[11px] leading-relaxed text-muted">
             <div className="num mb-2 text-[10px] uppercase tracking-[0.12em] text-accent">
               your stream — empty
             </div>
-            Post a transaction with the curl card above and it'll appear
-            here within ~5s (polling, not live SSE — that ships W6).
+            Post a transfer — use <span className="text-fg">＋ New</span> in
+            the top bar or <span className="text-fg">Fund this account</span>{" "}
+            on any empty account — and it&apos;ll appear here within a few
+            seconds.
           </div>
         ) : (
           <AnimatePresence initial={false}>
@@ -102,8 +104,10 @@ function Row({ tx }: { tx: TxRow }) {
       : "var(--fg)";
 
   return (
+    // No `layout` prop: it ran a FLIP position-animation on every row whenever
+    // the list changed, which thrashed hard when many rows arrived at once
+    // (stress). New rows still slide/fade in; existing rows just reposition.
     <motion.div
-      layout
       initial={{ opacity: 0, x: 18 }}
       animate={{
         opacity: isVoided ? 0.55 : 1,

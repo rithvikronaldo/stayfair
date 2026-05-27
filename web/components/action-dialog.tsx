@@ -192,6 +192,9 @@ function PostForm({ onDone }: { onDone: () => void }) {
     [agents],
   );
 
+  const prefillDest = useActionDialog((s) => s.prefillDest);
+  const clearPrefill = useActionDialog((s) => s.clearPrefill);
+
   const [source, setSource] = useState("");
   const [dest, setDest] = useState("");
   const [amount, setAmount] = useState("");
@@ -203,6 +206,29 @@ function PostForm({ onDone }: { onDone: () => void }) {
     if (!source && options[0]) setSource(options[0].accountCode);
     if (!dest && options[1]) setDest(options[1].accountCode);
   }, [options, source, dest]);
+
+  // "Fund this account" shortcut: pre-select the empty account as the
+  // destination and auto-pick a funded, same-currency source so the transfer
+  // is one amount-and-go away. Runs after the default-fill effect (defined
+  // above) so it wins, then clears the prefill so it doesn't re-fire.
+  useEffect(() => {
+    if (!prefillDest) return;
+    const target = options.find((a) => a.accountCode === prefillDest);
+    if (!target) return;
+    setDest(prefillDest);
+    const funded =
+      options.find(
+        (a) =>
+          a.accountCode !== prefillDest &&
+          a.currency === target.currency &&
+          a.balance > 0,
+      ) ??
+      options.find(
+        (a) => a.accountCode !== prefillDest && a.currency === target.currency,
+      );
+    if (funded) setSource(funded.accountCode);
+    clearPrefill();
+  }, [prefillDest, options, clearPrefill]);
 
   const sourceAgent = options.find((a) => a.accountCode === source);
   const destAgent = options.find((a) => a.accountCode === dest);
@@ -231,15 +257,27 @@ function PostForm({ onDone }: { onDone: () => void }) {
     if (!valid || busy) return;
     setBusy(true);
     try {
-      const tx = await api.postTransaction({
-        description: description || "in-app transfer",
-        occurred_at: new Date().toISOString(),
-        entries: [
-          { account: source, amount: minor, currency, direction: "out" },
-          { account: dest, amount: minor, currency, direction: "in" },
-        ],
+      const desc = description || "in-app transfer";
+      const occurredAt = new Date().toISOString();
+      const entries = [
+        { account: source, amount: minor, currency, direction: "out" as const },
+        { account: dest, amount: minor, currency, direction: "in" as const },
+      ];
+      const res = await api.postTransaction({
+        description: desc,
+        occurred_at: occurredAt,
+        entries,
       });
-      useStore.getState().applyPostedTransaction(tx);
+      // POST /transactions returns { transaction_id, ... } and omits the
+      // description, so we rebuild the canonical PostedTransaction the store
+      // expects from what we already know plus the server-assigned id.
+      useStore.getState().applyPostedTransaction({
+        id: res.transaction_id,
+        description: desc,
+        occurred_at: res.occurred_at ?? occurredAt,
+        created_at: res.created_at ?? occurredAt,
+        entries: res.entries,
+      });
       toast.success("Transaction posted", {
         description: `${(minor / 100).toFixed(2)} ${currency} · ${sourceAgent?.name} → ${destAgent?.name}`,
       });

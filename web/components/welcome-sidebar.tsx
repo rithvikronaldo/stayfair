@@ -141,7 +141,7 @@ export function WelcomeSidebar({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 20 }}
           transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
-          className="fixed right-6 top-24 z-30 w-[340px] rounded-md border border-border bg-surface-1/95 p-4 shadow-xl backdrop-blur"
+          className="fixed right-6 top-24 z-30 w-[340px] rounded-md border border-border bg-surface-1 p-4 shadow-xl"
         >
           <header className="mb-3 flex items-start justify-between gap-2">
             <div>

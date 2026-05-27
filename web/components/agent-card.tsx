@@ -1,14 +1,21 @@
 "use client";
 
+import { useActionDialog } from "@/lib/action-dialog";
 import { useAnimatedNumber } from "@/lib/animated-number";
 import { fmtMinor } from "@/lib/format";
 import type { AgentRow } from "@/lib/store";
 
 export function AgentCard({ agent }: { agent: AgentRow }) {
+  const openDialog = useActionDialog((s) => s.openDialog);
   const animatedBalance = useAnimatedNumber(agent.balance);
   const animatedAvailable = useAnimatedNumber(agent.available);
   const animatedOnHold = useAnimatedNumber(agent.on_hold);
   const [whole, frac] = fmtMinor(animatedBalance).split(".");
+
+  // An empty, untouched jar: $0 with nothing pending. Show a one-click fund
+  // nudge so a freshly-opened account isn't a dead end.
+  const needsFunding =
+    agent.status !== "killed" && agent.balance === 0 && agent.on_hold === 0;
 
   const flashCls =
     agent.flash === "up"
@@ -76,6 +83,21 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
         <Cell k="Tx · 24h" v={agent.tx24h.toString()} />
         <Cell k="Burn / hr" v={agent.burnPerHr.toFixed(2)} />
       </div>
+
+      {needsFunding && (
+        <div className="mt-3 border-t border-border-2 pt-2.5">
+          <p className="mb-2 text-[11px] leading-snug text-dim">
+            No funds yet — post a transfer in to bring this account to life.
+          </p>
+          <button
+            type="button"
+            onClick={() => openDialog("post", { dest: agent.accountCode })}
+            className="num flex h-7 w-full items-center justify-center border border-accent/40 bg-accent/10 text-[10px] uppercase tracking-[0.14em] text-accent transition-colors hover:bg-accent/20"
+          >
+            ▶ Fund this account
+          </button>
+        </div>
+      )}
     </div>
   );
 }

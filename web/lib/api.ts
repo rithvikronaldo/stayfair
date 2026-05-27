@@ -94,6 +94,18 @@ export type PostedTransaction = {
   entries: PostedEntry[];
 };
 
+// POST /transactions returns a different shape than GET: it keys the id as
+// `transaction_id` and omits `description`/`id`. (GET /transactions and the
+// capture endpoint return the canonical PostedTransaction above.) Keep this
+// accurate so callers don't silently read undefined fields.
+export type PostTransactionResponse = {
+  transaction_id: string;
+  status: string;
+  occurred_at: string;
+  created_at: string;
+  entries: PostedEntry[];
+};
+
 export type TransactionListPage = {
   transactions: PostedTransaction[];
   next_cursor?: string;
@@ -175,7 +187,7 @@ export const api = {
     occurred_at: string;
     entries: { account: string; amount: number; currency: string; direction: "in" | "out" }[];
   }, idempotencyKey?: string) =>
-    request<PostedTransaction>("/transactions", {
+    request<PostTransactionResponse>("/transactions", {
       method: "POST",
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       body: JSON.stringify(input),

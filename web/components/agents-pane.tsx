@@ -22,7 +22,7 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {agents.length === 0 ? (
           <div className="px-4 py-6 text-[11px] leading-relaxed text-muted">
             {mode === "self" ? (

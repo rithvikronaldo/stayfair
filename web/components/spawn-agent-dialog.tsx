@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { api, ApiError, SUPPORTED_CURRENCIES, type Agent } from "@/lib/api";
 import { DUR, EASE } from "@/lib/motion";
+import { useStore } from "@/lib/store";
 
 const schema = z.object({
   name: z
@@ -28,6 +29,7 @@ export function SpawnAgentDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const mode = useStore((s) => s.mode);
 
   const {
     register,
@@ -55,7 +57,7 @@ export function SpawnAgentDialog({
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
         <button className="flex h-8 w-full items-center justify-center border border-accent/40 bg-accent/10 text-[11px] uppercase tracking-[0.14em] text-accent transition-colors hover:bg-accent/20">
-          + create account
+          + open account
         </button>
       </Dialog.Trigger>
 
@@ -81,10 +83,11 @@ export function SpawnAgentDialog({
                 transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
               >
                 <Dialog.Title className="text-[11px] uppercase tracking-[0.14em] text-muted">
-                  create account
+                  open account
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-[12px] text-muted">
-                  Adds a named asset account to the demo tenant.
+                  Opens a new named asset account in{" "}
+                  {mode === "self" ? "your ledger" : "the demo ledger"}.
                 </Dialog.Description>
 
                 <form
@@ -161,7 +164,7 @@ export function SpawnAgentDialog({
 // modal never surfaces raw Go error text (e.g. "ledger: agent name already
 // exists") to end users.
 function friendlyError(e: unknown): string {
-  if (!(e instanceof ApiError)) return "Could not create account.";
+  if (!(e instanceof ApiError)) return "Could not open the account.";
   switch (e.code) {
     case "agent_exists":
       return "An account with that name already exists.";
@@ -174,7 +177,7 @@ function friendlyError(e: unknown): string {
     case "invalid_json":
       return "Please check your input and try again.";
     default:
-      return "Could not create account. Try again in a moment.";
+      return "Could not open the account. Try again in a moment.";
   }
 }
 

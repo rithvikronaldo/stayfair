@@ -10,13 +10,21 @@ export type ActionMode = "spawn" | "post";
 type ActionDialogState = {
   open: boolean;
   mode: ActionMode;
-  openDialog: (mode: ActionMode) => void;
+  // prefillDest pre-selects the "To" account when the dialog opens in post
+  // mode — used by the "Fund this account" shortcut on empty account cards.
+  // PostForm consumes it on mount and calls clearPrefill so it doesn't stick.
+  prefillDest: string | null;
+  openDialog: (mode: ActionMode, opts?: { dest?: string }) => void;
   close: () => void;
+  clearPrefill: () => void;
 };
 
 export const useActionDialog = create<ActionDialogState>((set) => ({
   open: false,
   mode: "post",
-  openDialog: (mode) => set({ open: true, mode }),
-  close: () => set({ open: false }),
+  prefillDest: null,
+  openDialog: (mode, opts) =>
+    set({ open: true, mode, prefillDest: opts?.dest ?? null }),
+  close: () => set({ open: false, prefillDest: null }),
+  clearPrefill: () => set({ prefillDest: null }),
 }));

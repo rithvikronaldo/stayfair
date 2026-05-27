@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 import type { ReplayEvent, ReplayQueueState } from "@/lib/replay-queue";
 import { useStore, type TimeSkipSpeed } from "@/lib/store";
@@ -110,16 +111,28 @@ export function useTimeSkip(replay: ReplayQueueState): UseTimeSkipApi {
     };
   }, [step]);
 
-  // Buffering watcher: if rewind finished before the queue loaded, sit in
-  // buffering until the queue arrives, then promote to playing.
+  // Buffering watcher: once we're in buffering and the fetch has settled,
+  // either promote to playing (events found) or — crucially — bail out if the
+  // window is EMPTY. Without the empty branch the orchestrator hangs in
+  // buffering forever on a quiet ledger (rewound, tinted, nothing to play).
+  // Subscribing to phase (not just reading via getState) makes this re-run on
+  // the rewinding→buffering transition regardless of fetch/phase ordering.
+  const phase = useStore((s) => s.timeSkipPhase);
   useEffect(() => {
-    if (replay.isLoading) return;
+    if (phase !== "buffering" || replay.isLoading) return;
     const s = useStore.getState();
-    if (s.timeSkipPhase === "buffering" && replay.queue.length > 0) {
+    if (replay.queue.length > 0) {
       s.setTimeSkipCursor(0, replay.queue.length);
       s.setTimeSkipPhase("playing");
+    } else {
+      toast("Nothing to replay", {
+        description: "No activity on this ledger in the last few minutes.",
+      });
+      s.setTimeSkipPhase("idle");
+      s.clearReplayState();
+      s.setAsOf(null);
     }
-  }, [replay.queue.length, replay.isLoading]);
+  }, [phase, replay.queue.length, replay.isLoading]);
 
   const replayLast = useCallback((minutes: number) => {
     clearTimer();

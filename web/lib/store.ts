@@ -102,11 +102,13 @@ type State = {
   timeSkipCursor: number;
   timeSkipTotal: number;
 
-  // Stress / Take-Off state (W5 D7). Drives the overlay chart.
+  // Stress / Take-Off state (W5 D7; reworked W6 D2 to real batched progress).
   stressPhase: StressPhase;
   stressN: number;          // requested N for the in-flight run
   stressStartedAt: number;  // wall-clock ms (Date.now()) when the run kicked off
   stressResult: StressResult | null;
+  stressPosted: number;     // REAL cumulative committed count (advances per batch)
+  stressSamples: { t: number; posted: number }[]; // real chart points: t=sec, posted
 };
 
 type Actions = {
@@ -136,10 +138,20 @@ type Actions = {
   setTimeSkipCursor: (cursor: number, total: number) => void;
   applyReplayEvent: (tx: PostedTransaction) => void;
   applyPostedTransaction: (tx: PostedTransaction) => void;
+  // hydrateTxStream backfills the feed with recent history on sign-in. Unlike
+  // applyPostedTransaction it does NOT touch balances — those are already
+  // correct from the seed, so re-applying deltas would double-count.
+  hydrateTxStream: (transactions: PostedTransaction[]) => void;
+  // pushStressRows prepends a few just-committed rows during a stress run
+  // (smooth trickle, no full-list replace). See implementation for why.
+  pushStressRows: (transactions: PostedTransaction[]) => void;
   clearReplayState: () => void;
 
   // Stress / Take-Off (W5 D7).
   startStress: (n: number) => void;
+  // advanceStress records REAL progress after each committed batch: the
+  // cumulative posted count + a chart sample at tSec seconds since start.
+  advanceStress: (posted: number, tSec: number) => void;
   completeStress: (result: StressResult) => void;
   resetStress: () => void;
 };
@@ -169,6 +181,7 @@ function pushHistory(history: number[], next: number): number[] {
 
 function vendorFromDest(dest: string): string {
   // dest is "vendor_pool_<ccy>" → "pool"
+  if (!dest) return "pool";
   const m = dest.match(/^vendor_pool_/i);
   if (m) return "vendor:pool";
   if (dest.startsWith("agent_")) return dest.slice(0, 14);
@@ -176,8 +189,42 @@ function vendorFromDest(dest: string): string {
 }
 
 function inferVendorFromDescription(desc: string): string {
+  if (!desc) return "pool";
   const m = desc.match(/(?:cp|vendor):(\w+)/i);
   return m ? m[1] : "pool";
+}
+
+// buildHistoryRow maps a settled PostedTransaction into a feed row WITHOUT
+// touching balances. Shared by hydrateTxStream (sign-in backfill) and
+// pushStressRows (the trickle during a stress run). Returns null for a
+// malformed tx (missing an in/out leg).
+function buildHistoryRow(
+  tx: PostedTransaction,
+  byCode: Map<string, AgentRow>,
+  block: number,
+): TxRow | null {
+  const sourceEntry = tx.entries.find((e) => e.direction === "out");
+  const destEntry = tx.entries.find((e) => e.direction === "in");
+  if (!sourceEntry || !destEntry) return null;
+  const sourceAgent = byCode.get(sourceEntry.account);
+  return {
+    id: `tx-hist-${tx.id}`,
+    txId: tx.id,
+    agentCode: sourceAgent?.code ?? "?",
+    agentName: sourceAgent?.name ?? "account",
+    agentAccountCode: sourceEntry.account,
+    vendor:
+      inferVendorFromDescription(tx.description) ||
+      vendorFromDest(destEntry.account),
+    amount: sourceEntry.amount,
+    capturedAmount: sourceEntry.amount,
+    currency: sourceEntry.currency,
+    symbol: SYMBOLS[sourceEntry.currency] ?? "$",
+    status: "captured",
+    hash: shortHash(tx.id),
+    block,
+    ts: Date.parse(tx.occurred_at) || Date.now(),
+  };
 }
 
 export const useStore = create<State & Actions>()((set, get) => ({
@@ -199,6 +246,8 @@ export const useStore = create<State & Actions>()((set, get) => ({
   stressN: 0,
   stressStartedAt: 0,
   stressResult: null,
+  stressPosted: 0,
+  stressSamples: [],
 
   setBootstrapped: (b) => set({ bootstrapped: b }),
   setConnected: (b) => set({ connected: b }),
@@ -618,6 +667,43 @@ export const useStore = create<State & Actions>()((set, get) => ({
     });
   },
 
+  hydrateTxStream: (transactions) => {
+    const byCode = new Map(get().agents.map((a) => [a.accountCode, a]));
+    const historyRows = transactions
+      .map((tx, i) => buildHistoryRow(tx, byCode, blockCounter - i - 1))
+      .filter((r): r is TxRow => r !== null);
+
+    // Merge with any live rows already present (e.g. First Tick fired before
+    // backfill landed), dedupe by txId so a transaction is never listed twice,
+    // then show newest-first and cap to the stream window.
+    const seen = new Set(historyRows.map((r) => r.txId));
+    const merged = [
+      ...get().txs.filter((r) => !r.txId || !seen.has(r.txId)),
+      ...historyRows,
+    ].sort((a, b) => b.ts - a.ts);
+    set({ txs: merged.slice(0, 30) });
+  },
+
+  // pushStressRows trickles a few freshly-committed rows onto the TOP of the
+  // feed during a stress run. Unlike hydrateTxStream it does NOT re-sort or
+  // replace the whole list — it prepends only rows not already shown — so the
+  // feed grows a few rows at a time (smooth, like the live stream) instead of
+  // swapping all 30 every batch (which thrashed Framer layout and stuttered).
+  pushStressRows: (transactions) => {
+    const byCode = new Map(get().agents.map((a) => [a.accountCode, a]));
+    const existing = get().txs;
+    const shown = new Set(existing.map((r) => r.txId).filter(Boolean));
+    const fresh: TxRow[] = [];
+    transactions.forEach((tx, i) => {
+      if (shown.has(tx.id)) return;
+      const row = buildHistoryRow(tx, byCode, blockCounter + i + 1);
+      if (row) fresh.push(row);
+    });
+    if (fresh.length === 0) return;
+    fresh.sort((a, b) => b.ts - a.ts);
+    set({ txs: [...fresh, ...existing].slice(0, 30) });
+  },
+
   // clearReplayState wipes any replay-tagged txs and resets orchestrator
   // state. Called on snap-to-NOW / new replay run.
   clearReplayState: () => {
@@ -635,10 +721,26 @@ export const useStore = create<State & Actions>()((set, get) => ({
       stressN: n,
       stressStartedAt: Date.now(),
       stressResult: null,
+      stressPosted: 0,
+      stressSamples: [{ t: 0, posted: 0 }],
+    });
+  },
+  advanceStress: (posted, tSec) => {
+    set({
+      stressPosted: posted,
+      stressSamples: [...get().stressSamples, { t: tSec, posted }],
     });
   },
   completeStress: (result) => {
-    set({ stressPhase: "done", stressResult: result });
+    set({
+      stressPhase: "done",
+      stressResult: result,
+      stressPosted: result.n_posted,
+      stressSamples: [
+        ...get().stressSamples,
+        { t: result.elapsed_ms / 1000, posted: result.n_posted },
+      ],
+    });
   },
   resetStress: () => {
     set({
@@ -646,6 +748,8 @@ export const useStore = create<State & Actions>()((set, get) => ({
       stressN: 0,
       stressStartedAt: 0,
       stressResult: null,
+      stressPosted: 0,
+      stressSamples: [],
     });
   },
 }));

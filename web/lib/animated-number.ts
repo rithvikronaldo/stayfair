@@ -19,21 +19,31 @@ import { DUR, EASE } from "@/lib/motion";
 // First mount lands on the initial value without animation — we don't want
 // every counter to count up from 0 on page load.
 
-export function useAnimatedNumber(target: number): number {
+// `enabled` (default true) tweens between values. Pass false when the target
+// changes every frame (e.g. the Take-Off chart's live-extrapolated counters
+// during a run): tweening a per-frame-changing target spawns a fresh ~300ms
+// animation every frame and saturates the main thread. With enabled=false the
+// value snaps to the target instead — cheap — and tweening resumes (animating
+// from the last value) the moment enabled flips back to true.
+export function useAnimatedNumber(target: number, enabled: boolean = true): number {
   const [value, setValue] = useState(target);
 
   useEffect(() => {
     if (value === target) return;
+    if (!enabled) {
+      setValue(target);
+      return;
+    }
     const controls = animate(value, target, {
       duration: DUR.entrance,
       ease: EASE.outExpo,
       onUpdate: (v) => setValue(v),
     });
     return () => controls.stop();
-    // We intentionally re-run only when the target changes; `value` is the
-    // animation source, not a re-trigger.
+    // We intentionally re-run only when the target (or enabled) changes;
+    // `value` is the animation source, not a re-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target]);
+  }, [target, enabled]);
 
   return value;
 }
