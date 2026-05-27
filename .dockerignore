@@ -1,0 +1,8 @@
+# The API image only needs the Go sources. Keep the frontend, git, and editor
+# cruft out so builds are fast and small.
+web/
+.git/
+.github/
+.vscode/
+bin/
+*.md

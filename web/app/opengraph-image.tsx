@@ -88,7 +88,7 @@ export default function Image() {
             color: "#FAFAFA",
           }}
         >
-          $ curl -X POST acta.money/transactions -H &quot;Authorization: Bearer ac_…&quot;
+          $ curl -X POST api.rithvikronaldo.dev/transactions -H &quot;Authorization: Bearer ac_…&quot;
         </div>
 
         <div
@@ -103,7 +103,7 @@ export default function Image() {
           }}
         >
           <span>A Postgres ledger you can sign up to</span>
-          <span style={{ color: "#F59E0B" }}>acta.money</span>
+          <span style={{ color: "#F59E0B" }}>acta.rithvikronaldo.dev</span>
         </div>
       </div>
     ),

@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://acta.money"),
+  metadataBase: new URL("https://acta.rithvikronaldo.dev"),
   title: {
     default: "acta — Ledger Sandbox",
     template: "%s — acta",
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
     title: "acta — Ledger Sandbox",
     description:
       "A double-entry Postgres ledger you can sign up to. Multi-currency, point-in-time queryable, multi-tenant.",
-    url: "https://acta.money",
+    url: "https://acta.rithvikronaldo.dev",
     siteName: "acta",
     type: "website",
   },

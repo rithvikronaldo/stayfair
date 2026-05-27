@@ -2,7 +2,7 @@
 
 **A multi-currency, double-entry, point-in-time-queryable ledger sandbox for backend engineers.**
 
-*Latin for "things done." A ledger is a record of things done. Live at [acta.money](https://acta.money).*
+*Latin for "things done." A ledger is a record of things done. Live at [acta.rithvikronaldo.dev](https://acta.rithvikronaldo.dev).*
 
 The ledger sandbox you wish existed when you were learning fintech backend. Sign up, get an API key, post your first transaction with curl, and watch it land in a real-time dashboard.
 
@@ -26,7 +26,7 @@ Building notes at [rithvikronaldo.dev](https://rithvikronaldo.dev).
 | 3 (May 4-10) | Authorize/capture lifecycle, SSE event stream, transaction list, agents schema | ✅ |
 | 4 (May 4-10) | Frontend dashboard, SSE event stream, ledger-sandbox repositioning | ✅ |
 | 5 (May 11-17) | Multi-tenancy: `tenants` table, signup endpoint, API key auth, cross-tenant isolation tests, dashboard tenant-switch | ✅ |
-| 6 (May 18-24) | `/docs`, deploy to [acta.money](https://acta.money), launch | 🚧 |
+| 6 (May 18-24) | `/docs`, deploy to [acta.rithvikronaldo.dev](https://acta.rithvikronaldo.dev), launch | 🚧 |
 
 ## Run it locally
 

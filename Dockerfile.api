@@ -1,0 +1,21 @@
+# Builds the acta Go API for Fly.io. Multi-stage: compile a static binary,
+# then run it on a minimal alpine image. The web/ frontend is excluded via
+# .dockerignore — it deploys to Vercel separately.
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+
+# Cache deps first.
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Build the API binary (static, no CGO).
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /bin/api ./cmd/api
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY --from=build /bin/api /bin/api
+# Fly routes to internal_port 8080; the API reads PORT (default 8080) + DB_URL.
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT ["/bin/api"]
