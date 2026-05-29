@@ -90,20 +90,65 @@ func TestListTransactionsByAccount(t *testing.T) {
 
 // TestListTransactionsCursorPagination asserts a multi-page walk visits every
 // transaction in the test set exactly once, no dupes, no gaps.
+//
+// Scoped to a freshly-spawned agent pair so the walk is bounded to this test's
+// own data — running against a long-lived dev DB (with thousands of demo
+// transactions on shared accounts like "cash") would otherwise blow past the
+// safety cap even though the cursor itself is correct.
 func TestListTransactionsCursorPagination(t *testing.T) {
 	pool := openTestDB(t)
 	orgID := uuid.MustParse(demoOrgID)
 	ctx := context.Background()
 
-	cleanup := makeTestTransactions(t, pool, orgID, "cash", 7)
-	defer cleanup()
+	// Unique agent names so reruns against the same DB don't collide on
+	// agents_tenant_id_name_key.
+	suffix := uuid.New().String()[:8]
+	srcAgent, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "cursor-src-"+suffix, "USD")
+	if err != nil {
+		t.Fatalf("spawn src: %v", err)
+	}
+	dstAgent, err := SpawnAgent(ctx, pool, orgID, DemoTenantID, "cursor-dst-"+suffix, "USD")
+	if err != nil {
+		t.Fatalf("spawn dst: %v", err)
+	}
+	defer func() {
+		for _, id := range []uuid.UUID{srcAgent.ID, dstAgent.ID} {
+			pool.Exec(ctx, "DELETE FROM accounts WHERE agent_id = $1", id)
+			pool.Exec(ctx, "DELETE FROM agents WHERE id = $1", id)
+		}
+	}()
+
+	const txCount = 7
+	authIDs := make([]uuid.UUID, 0, txCount)
+	txIDs := make([]uuid.UUID, 0, txCount)
+	for i := range txCount {
+		auth, err := Authorize(ctx, pool, orgID, DemoTenantID, srcAgent.AccountCode, dstAgent.AccountCode, 1, "USD", "cursor-test")
+		if err != nil {
+			t.Fatalf("authorize %d: %v", i, err)
+		}
+		authIDs = append(authIDs, auth.ID)
+		posted, err := Capture(ctx, pool, DemoTenantID, auth.ID, 1)
+		if err != nil {
+			t.Fatalf("capture %d: %v", i, err)
+		}
+		txIDs = append(txIDs, posted.ID)
+	}
+	defer func() {
+		for _, id := range authIDs {
+			pool.Exec(ctx, "DELETE FROM authorizations WHERE id = $1", id)
+		}
+		for _, id := range txIDs {
+			pool.Exec(ctx, "DELETE FROM entries WHERE transaction_id = $1", id)
+			pool.Exec(ctx, "DELETE FROM transactions WHERE id = $1", id)
+		}
+	}()
 
 	seen := make(map[uuid.UUID]bool)
 	var pages int
 	cursor := ""
 	for {
 		page, err := ListTransactions(ctx, pool, orgID, DemoTenantID, ListTransactionsFilter{
-			AccountCode: "cash",
+			AccountCode: srcAgent.AccountCode,
 			Limit:       3,
 			Cursor:      cursor,
 		})
@@ -126,10 +171,8 @@ func TestListTransactionsCursorPagination(t *testing.T) {
 		}
 	}
 
-	// We seeded at least 7 transactions touching cash; we should have walked
-	// them all (and maybe more from other tests, that's fine).
-	if len(seen) < 7 {
-		t.Errorf("expected at least 7 unique txns walked, got %d", len(seen))
+	if len(seen) != txCount {
+		t.Errorf("expected exactly %d unique txns walked, got %d", txCount, len(seen))
 	}
 }
 
@@ -168,7 +211,7 @@ func TestListTransactionsBadCursorRejected(t *testing.T) {
 	}
 }
 
-// TestListTransactionsLimitClamping asserts the limit is clamped to (1, 200].
+// TestListTransactionsLimitClamping asserts the limit is clamped to (1, 1000].
 func TestListTransactionsLimitClamping(t *testing.T) {
 	pool := openTestDB(t)
 	orgID := uuid.MustParse(demoOrgID)
@@ -179,8 +222,8 @@ func TestListTransactionsLimitClamping(t *testing.T) {
 		if err != nil {
 			t.Fatalf("limit=%d: %v", lim, err)
 		}
-		if len(page.Transactions) > 200 {
-			t.Errorf("limit=%d: returned %d > 200", lim, len(page.Transactions))
+		if len(page.Transactions) > 1000 {
+			t.Errorf("limit=%d: returned %d > 1000", lim, len(page.Transactions))
 		}
 	}
 }

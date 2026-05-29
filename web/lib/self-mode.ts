@@ -6,11 +6,18 @@ import { api } from "@/lib/api";
 import { useApiKey } from "@/lib/api-key";
 import { useStore } from "@/lib/store";
 
-// useSelfModePolling drives the dashboard when the user is signed in.
+// useSelfModePolling drives the dashboard agents/balances refresh loop.
+// Runs in BOTH modes:
+//   - Self mode (apiKey set): polls every 5s, drives the user's own tenant.
+//   - Demo mode (no apiKey):  polls every 5s, drives the public demo tenant
+//     so the agents pane + hero number populate on anonymous visits. The
+//     simulator (server-side) continues to emit auth_* events via SSE which
+//     useEventStream applies as deltas; this loop is the source-of-truth
+//     correction every 5s.
 //
-// SSE is disabled in self mode because event payloads don't carry tenant_id
-// yet (W6 carryover); a connected stream would leak demo activity. Instead
-// this polls /agents (every 5s) and pulls a fresh balance per agent.
+// SSE is the demo's real-time pipe; in self mode SSE is disabled because
+// event payloads don't carry tenant_id yet (W6 carryover) and a connected
+// stream would leak demo activity into the user's view.
 //
 // CRITICAL (W6 D2 fix): reset()/setMode are keyed on apiKey ALONE. They must
 // NOT run when asOf changes — entering replay sets asOf, and a reset() there
@@ -28,11 +35,10 @@ export function useSelfModePolling() {
     backfilledRef.current = false;
   }, [apiKey]);
 
-  // Polling: active only when signed in AND live (asOf === null). Entering
-  // replay (asOf !== null) tears this down and pauses; returning to LIVE
-  // resumes it. No reset() here — replay state is left untouched.
+  // Polling: pauses during replay (asOf set) so the rewound view doesn't get
+  // clobbered by live data. Resumes on snap-to-NOW. Runs in both modes.
   useEffect(() => {
-    if (!apiKey || asOf !== null) return;
+    if (asOf !== null) return;
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -66,17 +72,27 @@ export function useSelfModePolling() {
 
     refreshOnce().then(() => {
       if (cancelled) return;
-      // One-time history backfill per tenant: the seed leaves ~100 txns in the
-      // DB that feed balances but never the stream, so the feed reads empty on
-      // first paint. Pull recent ones in (balance-neutral) so the dashboard is
-      // populated on arrival. Guarded so it fires once, not on every LIVE
-      // resume after a replay.
+      // One-time backfills per tenant:
+      //   (a) the feed gets the 30 most-recent txns so the stream isn't empty
+      //       on first paint;
+      //   (b) the agent cards get tx24h / burnPerHr computed from the last
+      //       24h (up to the 1000 hard cap) — without this both fields stay
+      //       at 0 in self mode because they're hardcoded in initFromBackend.
+      // Guarded so this fires once per sign-in, not on every LIVE resume.
       if (!backfilledRef.current) {
         backfilledRef.current = true;
         api
           .listTransactions({ limit: 30 })
           .then((page) => {
             if (!cancelled) useStore.getState().hydrateTxStream(page.transactions);
+          })
+          .catch(() => {});
+
+        const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
+        api
+          .listTransactions({ from: dayAgo, limit: 1000 })
+          .then((page) => {
+            if (!cancelled) useStore.getState().recomputeAccountStats(page.transactions);
           })
           .catch(() => {});
       }

@@ -24,7 +24,12 @@ type signupRequest struct {
 // in the response ONCE. The caller (frontend or curl) must surface it to
 // the user with a "copy this now, you can't see it again" affordance.
 //
-// 409 on duplicate email. 400 on invalid JSON. 500 on backend trouble.
+// Signup is idempotent on email — a returning user gets a freshly rotated
+// key bound to their existing tenant (and existing accounts/transactions
+// are preserved). The response's `created` flag is true on a fresh insert
+// and false on a rotation; the status is 201 / 200 respectively.
+//
+// 400 on invalid JSON. 500 on backend trouble.
 func PostTenant(pool *pgxpool.Pool) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req signupRequest
@@ -35,13 +40,7 @@ func PostTenant(pool *pgxpool.Pool) fiber.Handler {
 			})
 		}
 
-		tenant, rawKey, err := ledger.CreateTenant(c.Context(), pool, req.Email, req.Name)
-		if errors.Is(err, ledger.ErrTenantExists) {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error":   "email_taken",
-				"message": err.Error(),
-			})
-		}
+		tenant, rawKey, created, err := ledger.CreateTenant(c.Context(), pool, req.Email, req.Name)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   "signup_failed",
@@ -49,20 +48,25 @@ func PostTenant(pool *pgxpool.Pool) fiber.Handler {
 			})
 		}
 
-		// Populate the new tenant with starter data so the dashboard isn't
-		// empty after signup. Three accounts + a historical funding tx +
-		// a captured activity tx + a pending authorization for the user's
-		// first guided action.
-		if err := ledger.SeedNewTenant(c.Context(), pool, demoOrgID, tenant.ID); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":   "seed_failed",
-				"message": err.Error(),
-			})
+		// Only seed starter data on a fresh tenant — a rotation keeps the
+		// existing tenant's accounts and history intact.
+		if created {
+			if err := ledger.SeedNewTenant(c.Context(), pool, demoOrgID, tenant.ID); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error":   "seed_failed",
+					"message": err.Error(),
+				})
+			}
 		}
 
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		status := fiber.StatusCreated
+		if !created {
+			status = fiber.StatusOK
+		}
+		return c.Status(status).JSON(fiber.Map{
 			"tenant":          tenant,
 			"api_key":         rawKey,
+			"created":         created,
 			"api_key_warning": "store this now — it cannot be retrieved later",
 		})
 	}

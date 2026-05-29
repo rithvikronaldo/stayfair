@@ -35,14 +35,18 @@ export function useSpendDriver() {
   const apiKey = useApiKey((s) => s.apiKey);
   const asOf = useStore((s) => s.asOf);
   useEffect(() => {
-    // Self mode (user signed in): pause the simulator entirely. The user
-    // creates their own activity via curl with their Bearer key. The
-    // simulator drives the demo tenant only; running it under the user's
-    // Bearer would 404 on demo account_codes.
+    // Demo activity is now generated server-side by api.StartDemoSimulator.
+    // Anonymous visitors receive it via SSE — the browser no longer needs
+    // mutation rights against the demo tenant. This frontend driver is
+    // retained as a no-op so the hook signature stays stable for any
+    // callers; the body below short-circuits before doing anything.
+    return;
+
+    // Unreachable. Kept below as documentation of the prior frontend-driven
+    // behaviour in case we ever need to A/B against the server simulator.
+    // The previous flow: in demo mode, post authorize + capture cycles
+    // every 1.5–4s to keep the public dashboard visibly alive.
     if (apiKey) return;
-    // REPLAY mode: don't generate new activity while the scrubber is in
-    // the past — new transactions would land at NOW, polluting the
-    // historical view.
     if (asOf !== null) return;
 
     let cancelled = false;

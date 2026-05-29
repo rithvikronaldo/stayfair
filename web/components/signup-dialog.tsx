@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useApiKey } from "@/lib/api-key";
 import { DUR, EASE } from "@/lib/motion";
 
@@ -30,6 +30,8 @@ export function SignupDialog({
 }) {
   const [apiKey, setApiKeyLocal] = useState<string | null>(null);
   const [keyEmail, setKeyEmail] = useState<string>("");
+  const [tenantCreatedAt, setTenantCreatedAt] = useState<string>("");
+  const [rotated, setRotated] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const setApiKey = useApiKey((s) => s.set);
@@ -52,20 +54,16 @@ export function SignupDialog({
       });
       setApiKeyLocal(resp.api_key);
       setKeyEmail(resp.tenant.email);
-    } catch (e) {
-      if (e instanceof ApiError && e.code === "email_taken") {
-        setServerError("An account with that email already exists.");
-      } else if (e instanceof ApiError && e.code === "invalid_json") {
-        setServerError("Please enter a valid email.");
-      } else {
-        setServerError("Could not create account. Try again in a moment.");
-      }
+      setTenantCreatedAt(resp.tenant.created_at);
+      setRotated(!resp.created);
+    } catch {
+      setServerError("Could not create account. Try again in a moment.");
     }
   };
 
   const handleDone = () => {
     if (apiKey) {
-      setApiKey(apiKey, keyEmail);
+      setApiKey(apiKey, keyEmail, tenantCreatedAt);
       // The first-signup whisper — quiet, once, as the dashboard appears.
       // Sets the tone: nothing here is mocked.
       setTimeout(() => {
@@ -82,6 +80,8 @@ export function SignupDialog({
     setTimeout(() => {
       setApiKeyLocal(null);
       setKeyEmail("");
+      setTenantCreatedAt("");
+      setRotated(false);
       setServerError(null);
       setCopied(false);
       reset();
@@ -123,12 +123,18 @@ export function SignupDialog({
                 transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
               >
                 <Dialog.Title className="text-[11px] uppercase tracking-[0.14em] text-muted">
-                  {apiKey ? "your api key" : "sign up for an api key"}
+                  {apiKey
+                    ? rotated
+                      ? "key rotated"
+                      : "your api key"
+                    : "sign up for an api key"}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 text-[12px] text-muted">
                   {apiKey
-                    ? "Copy this now — it cannot be retrieved later."
-                    : "Get a key, post your first transaction with curl."}
+                    ? rotated
+                      ? "Your previous key is now invalid. Your accounts and history are still here."
+                      : "Copy this now — it cannot be retrieved later."
+                    : "Same email signs you back in with a fresh key — your accounts stay."}
                 </Dialog.Description>
 
                 {!apiKey ? (

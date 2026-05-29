@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { toast } from "sonner";
 
 import type { ReplayEvent, ReplayQueueState } from "@/lib/replay-queue";
+import { playChimeIfUnmuted, playRewindIfUnmuted } from "@/lib/sound";
 import { useStore, type TimeSkipSpeed } from "@/lib/store";
 
 // useTimeSkip orchestrates The Time Skip choreography (W5 D5). It owns the
@@ -33,6 +34,11 @@ const MAX_GAP_MS = 600;
 
 export type UseTimeSkipApi = {
   replayLast: (minutes: number) => void;
+  // playFromAsOf — start playback from the current store.asOf forward to NOW.
+  // Used by the scrubber: drop the playhead in the past, release, and the
+  // dashboard auto-plays forward from where you dropped. No rewind animation
+  // (the scrubber is already at the right spot).
+  playFromAsOf: () => void;
   play: () => void;
   pause: () => void;
   setSpeed: (speed: TimeSkipSpeed) => void;
@@ -142,6 +148,7 @@ export function useTimeSkip(replay: ReplayQueueState): UseTimeSkipApi {
     s.setTimeSkipCursor(0, 0);
     s.setTimeSkipPhase("rewinding");
     s.setAsOf(new Date(Date.now() - minutes * 60_000));
+    playRewindIfUnmuted();
 
     window.setTimeout(() => {
       const cur = useStore.getState();
@@ -153,6 +160,24 @@ export function useTimeSkip(replay: ReplayQueueState): UseTimeSkipApi {
         cur.setTimeSkipPhase("buffering");
       }
     }, REWIND_MS);
+  }, []);
+
+  const playFromAsOf = useCallback(() => {
+    clearTimer();
+    cursorRef.current = 0;
+    const s = useStore.getState();
+    if (s.asOf === null) return; // must be in REPLAY mode (scrubber elsewhere)
+    s.clearReplayState();
+    s.setTimeSkipCursor(0, 0);
+    // No rewind glide — the scrubber is already at the user-dropped position.
+    // If the queue is already fetched, start immediately; otherwise let the
+    // buffering watcher promote to playing when the fetch settles.
+    if (queueRef.current.length > 0) {
+      s.setTimeSkipCursor(0, queueRef.current.length);
+      s.setTimeSkipPhase("playing");
+    } else {
+      s.setTimeSkipPhase("buffering");
+    }
   }, []);
 
   const play = useCallback(() => {
@@ -171,10 +196,14 @@ export function useTimeSkip(replay: ReplayQueueState): UseTimeSkipApi {
     clearTimer();
     cursorRef.current = 0;
     const s = useStore.getState();
+    // The Return chime: only fires when we're actually returning from a
+    // replay (asOf set or orchestrator active). LIVE→LIVE stays silent.
+    const wasAway = s.asOf !== null || s.timeSkipPhase !== "idle";
     s.setTimeSkipPhase("idle");
     s.clearReplayState();
     s.setAsOf(null);
+    if (wasAway) playChimeIfUnmuted();
   }, []);
 
-  return { replayLast, play, pause, setSpeed, snapToNow };
+  return { replayLast, playFromAsOf, play, pause, setSpeed, snapToNow };
 }

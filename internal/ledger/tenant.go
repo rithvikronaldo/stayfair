@@ -38,38 +38,46 @@ var (
 // returns the tenant along with the raw key. The raw key is returned ONCE
 // — caller MUST echo it to the end user and not log it. We never store
 // the raw value, so it's unrecoverable after this call.
+//
+// If the email already exists, this rotates the existing tenant's API
+// key (the old key is invalidated) and returns the existing tenant with
+// `created = false`. The tenant's accounts, transactions, and other data
+// stay attached — the caller uses `created` to decide whether to seed
+// starter data. This makes signup idempotent for users who lose their
+// device/localStorage: same email, fresh key, same data.
 func CreateTenant(
 	ctx context.Context,
 	pool *pgxpool.Pool,
 	email, name string,
-) (*Tenant, string, error) {
+) (tenant *Tenant, rawKey string, created bool, err error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return nil, "", fmt.Errorf("ledger: email is required")
+		return nil, "", false, fmt.Errorf("ledger: email is required")
 	}
 
-	rawKey, err := generateAPIKey()
+	rawKey, err = generateAPIKey()
 	if err != nil {
-		return nil, "", fmt.Errorf("generate api key: %w", err)
+		return nil, "", false, fmt.Errorf("generate api key: %w", err)
 	}
 	hash := hashAPIKey(rawKey)
 
 	var t Tenant
 	t.Email = email
 	t.Name = name
+	// xmax = 0 on RETURNING distinguishes a fresh INSERT (created=true)
+	// from a conflict-driven UPDATE (created=false). Name is only set on
+	// insert — we don't overwrite a chosen name with a blank on rotation.
 	err = pool.QueryRow(ctx, `
 		INSERT INTO tenants (email, api_key_hash, name)
 		VALUES ($1, $2, NULLIF($3, ''))
-		RETURNING id, created_at
-	`, email, hash, name).Scan(&t.ID, &t.CreatedAt)
+		ON CONFLICT (email) DO UPDATE
+			SET api_key_hash = EXCLUDED.api_key_hash
+		RETURNING id, created_at, COALESCE(name, ''), (xmax = 0)
+	`, email, hash, name).Scan(&t.ID, &t.CreatedAt, &t.Name, &created)
 	if err != nil {
-		// 23505 is unique_violation; the column is tenants_email_key.
-		if strings.Contains(err.Error(), "tenants_email_key") {
-			return nil, "", fmt.Errorf("%w: %q", ErrTenantExists, email)
-		}
-		return nil, "", fmt.Errorf("insert tenant: %w", err)
+		return nil, "", false, fmt.Errorf("upsert tenant: %w", err)
 	}
-	return &t, rawKey, nil
+	return &t, rawKey, created, nil
 }
 
 // LookupTenantByID returns the tenant row for a given id. Used by

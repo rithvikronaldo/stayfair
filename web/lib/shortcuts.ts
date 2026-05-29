@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 
+import { useApiKey } from "@/lib/api-key";
 import { useCommandPalette } from "@/lib/command-palette";
 import { STRESS_DEFAULT_N, useStressRun } from "@/lib/stress";
 import type { UseTimeSkipApi } from "@/lib/time-skip";
@@ -51,6 +52,10 @@ export function useKeyboardShortcuts(timeSkip: UseTimeSkipApi) {
         e.preventDefault();
         timeSkip.replayLast(5);
       } else if (k === "s" || k === "S") {
+        // Stress requires auth — anonymous visitors can't dump txns into the
+        // demo tenant via this shortcut. Silently no-op rather than fire a
+        // request that the backend would 401.
+        if (!useApiKey.getState().apiKey) return;
         e.preventDefault();
         stress.run(STRESS_DEFAULT_N);
       } else if (k === "?") {

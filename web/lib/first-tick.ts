@@ -15,12 +15,12 @@ import { useStore } from "@/lib/store";
 // cycles between same-currency pairs, applied optimistically so the stream and
 // balances move instantly (self-mode polling is only every 5s).
 //
-// The window is anchored per-key in localStorage, so it survives reloads and
-// stops for good once 5 minutes from first sign-in have elapsed — the tenant
-// then lives on the user's own actions.
+// The window is gated against the tenant's server-side `created_at` so it
+// can't restart on a key rotation (re-signup with an existing email returns a
+// fresh key bound to the old tenant) and won't fire for an old tenant signed
+// into a fresh browser.
 
 const WINDOW_MS = 5 * 60_000;
-const STORAGE_PREFIX = "acta.first_tick.";
 
 const DESCRIPTIONS = [
   "Stripe payout settlement",
@@ -42,23 +42,17 @@ function pick<T>(xs: T[]): T {
 
 export function useFirstTick() {
   const apiKey = useApiKey((s) => s.apiKey);
+  const tenantCreatedAt = useApiKey((s) => s.tenantCreatedAt);
   const asOf = useStore((s) => s.asOf);
 
   useEffect(() => {
     if (!apiKey) return; // signed-in tenants only
     if (asOf !== null) return; // never generate activity during replay
+    if (!tenantCreatedAt) return; // legacy session w/o created_at — opt out
 
-    // Anchor (or read) the 5-minute window for this key.
-    const storeKey = STORAGE_PREFIX + apiKey;
-    let start = Date.now();
-    try {
-      const stored = localStorage.getItem(storeKey);
-      if (stored) start = Number(stored);
-      else localStorage.setItem(storeKey, String(start));
-    } catch {
-      /* storage unavailable — run the window from now */
-    }
-    if (Date.now() - start > WINDOW_MS) return; // window elapsed → no-op
+    const start = new Date(tenantCreatedAt).getTime();
+    if (Number.isNaN(start)) return;
+    if (Date.now() - start > WINDOW_MS) return; // tenant older than the window
 
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -131,5 +125,5 @@ export function useFirstTick() {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [apiKey, asOf]);
+  }, [apiKey, tenantCreatedAt, asOf]);
 }

@@ -36,25 +36,32 @@ func New(pool *pgxpool.Pool, broadcaster *events.Broadcaster) *fiber.App {
 	app.Get("/health", Health(pool))
 	app.Get("/events/stream", StreamEvents(broadcaster))
 
-	app.Post("/transactions", PostTransaction(pool, broadcaster))
+	// Read paths stay open to anonymous visitors so the public dashboard
+	// can render demo-tenant data without signup.
 	app.Get("/transactions", GetTransactions(pool))
 	app.Get("/accounts/:code/balance", GetAccountBalance(pool))
-
 	app.Get("/authorizations", GetAuthorizations(pool))
-	app.Post("/authorizations", PostAuthorization(pool, broadcaster))
-	app.Post("/authorizations/:id/capture", PostCapture(pool, broadcaster))
-	app.Post("/authorizations/:id/void", PostVoid(pool, broadcaster))
-
-	app.Post("/agents", PostAgent(pool, broadcaster))
 	app.Get("/agents", GetAgents(pool))
-	app.Post("/agents/:id/kill", PostKillAgent(pool, broadcaster))
 
-	// Bulk-post N balanced txns. The Take-Off / stress feature.
-	app.Post("/stress", PostStress(pool, broadcaster))
+	// Mutating paths require a valid Bearer token. The demo-tenant fallback
+	// in TenantAuth is read-only territory — anonymous visitors of the
+	// public dashboard cannot stress-test, post, capture, void, spawn, or
+	// kill against the demo tenant. RequireAuth 401s on the no-header path.
+	// Per-route (rather than app.Group("", RequireAuth())) because the
+	// empty-prefix group leaked the middleware onto routes registered after
+	// it, including POST /tenants signup.
+	requireAuth := RequireAuth()
+	app.Post("/transactions", requireAuth, PostTransaction(pool, broadcaster))
+	app.Post("/authorizations", requireAuth, PostAuthorization(pool, broadcaster))
+	app.Post("/authorizations/:id/capture", requireAuth, PostCapture(pool, broadcaster))
+	app.Post("/authorizations/:id/void", requireAuth, PostVoid(pool, broadcaster))
+	app.Post("/agents", requireAuth, PostAgent(pool, broadcaster))
+	app.Post("/agents/:id/kill", requireAuth, PostKillAgent(pool, broadcaster))
+	app.Post("/stress", requireAuth, PostStress(pool, broadcaster))
 
-	// Signup — anyone can hit this without a Bearer token; the middleware
-	// resolves to demo tenant but the handler doesn't use it. Returns a
-	// fresh API key once.
+	// Signup — anyone can hit this without a Bearer token; the handler
+	// upserts on email and returns a fresh API key. NOT gated by
+	// RequireAuth because new users have no key yet.
 	app.Post("/tenants", PostTenant(pool))
 
 	// Current tenant — returns the tenant the middleware resolved (demo

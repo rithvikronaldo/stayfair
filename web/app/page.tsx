@@ -36,7 +36,6 @@ export default function Home() {
 
   const agents = useStore((s) => s.agents);
   const txs = useStore((s) => s.txs);
-  const block = useStore((s) => s.block);
   const totalUsd = useStore((s) => s.totalUsd);
   const totalFlash = useStore((s) => s.totalFlash);
   const decayFlashes = useStore((s) => s.decayFlashes);
@@ -61,8 +60,7 @@ export default function Home() {
         <TopBar
           agentCount={agents.filter((a) => a.status !== "killed").length}
           ccyCount={ccyCount}
-          txCount={1247 + txs.length}
-          block={block}
+          txCount={txs.length}
         />
 
         <main className="grid grid-rows-[minmax(0,1fr)] grid-cols-[280px_1fr_360px] overflow-hidden">

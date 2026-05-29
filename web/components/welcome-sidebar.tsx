@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { CurlHint } from "@/components/curl-hint";
 import { CurlReveal } from "@/components/curl-reveal";
+import { API_URL } from "@/lib/api";
 import { useApiKey } from "@/lib/api-key";
 import { useCaptureFlow } from "@/lib/capture";
 import { DUR, EASE } from "@/lib/motion";
@@ -176,26 +178,36 @@ export function WelcomeSidebar({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
             {STEPS.map((step) => {
               const isDone = done.has(step.num);
               const isBusy = busyStep === step.num;
+              const curl = curlForStep(step.num, apiKey);
+              const stepButton = (
+                <button
+                  type="button"
+                  onClick={() => runStep(step.num)}
+                  disabled={isBusy}
+                  className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2 disabled:cursor-wait disabled:opacity-70"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-[10px] text-dim">
+                      {isDone ? "✓" : String(step.num).padStart(2, "0")}
+                    </span>
+                    <span className="text-sm font-medium text-fg">
+                      {isBusy ? "· · ·" : "▶"} {step.title}
+                    </span>
+                  </div>
+                  <p className="mt-1 pl-6 text-xs leading-snug text-muted">
+                    {step.blurb}
+                  </p>
+                </button>
+              );
               return (
                 <li key={step.num}>
-                  <button
-                    type="button"
-                    onClick={() => runStep(step.num)}
-                    disabled={isBusy}
-                    className="group w-full rounded-sm border border-border-2 bg-surface-2/40 px-3 py-2 text-left transition-colors hover:border-border hover:bg-surface-2 disabled:cursor-wait disabled:opacity-70"
-                  >
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-mono text-[10px] text-dim">
-                        {isDone ? "✓" : String(step.num).padStart(2, "0")}
-                      </span>
-                      <span className="text-sm font-medium text-fg">
-                        {isBusy ? "· · ·" : "▶"} {step.title}
-                      </span>
-                    </div>
-                    <p className="mt-1 pl-6 text-xs leading-snug text-muted">
-                      {step.blurb}
-                    </p>
-                  </button>
+                  {curl ? (
+                    <CurlHint curl={curl} align="left" block>
+                      {stepButton}
+                    </CurlHint>
+                  ) : (
+                    stepButton
+                  )}
                 </li>
               );
             })}
@@ -232,4 +244,25 @@ export function WelcomeSidebar({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
     <CurlReveal open={curlOpen} onClose={() => setCurlOpen(false)} />
     </>
   );
+}
+
+function curlForStep(num: number, apiKey: string | null): string | null {
+  const auth = `-H "Authorization: Bearer ${apiKey ?? "<your_api_key>"}"`;
+  switch (num) {
+    case 1:
+      return `curl -X POST "${API_URL}/authorizations/<auth_id>/capture" \\
+  ${auth} \\
+  -H "Content-Type: application/json" \\
+  -d '{}'`;
+    case 2:
+      return `curl -X POST "${API_URL}/stress" \\
+  ${auth} \\
+  -H "Content-Type: application/json" \\
+  -d '{"n": ${STRESS_DEFAULT_N}}'`;
+    case 3:
+      return `curl "${API_URL}/transactions?from=<5min_ago_iso>&to=<now_iso>" \\
+  ${auth}`;
+    default:
+      return null;
+  }
 }

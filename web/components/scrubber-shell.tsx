@@ -2,10 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { CurlHint } from "@/components/curl-hint";
+import { API_URL } from "@/lib/api";
+import { useApiKey } from "@/lib/api-key";
 import { fmtSmartTime } from "@/lib/format";
 import { EASE } from "@/lib/motion";
+import { playTickIfUnmuted } from "@/lib/sound";
 import { useStore, type TimeSkipSpeed } from "@/lib/store";
 import type { UseTimeSkipApi } from "@/lib/time-skip";
+
+// While dragging, setAsOf at most once every DRAG_THROTTLE_MS so the
+// dashboard's balance refetches don't stampede the network. Roughly
+// 8 fetches/sec — enough for visual tracking, light enough to coast.
+const DRAG_THROTTLE_MS = 120;
+
+// Tactile tick at most every DRAG_TICK_MS so a slow drag doesn't fire a
+// continuous tone. Independent of the setAsOf throttle.
+const DRAG_TICK_MS = 90;
 
 // Preset stops the scrubber click-snaps to. Continuous drag (W5 D4) coexists
 // with these — drop-position lands wherever the user lifts the pointer, but
@@ -33,11 +46,15 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
   const speed = useStore((s) => s.timeSkipSpeed);
   const cursor = useStore((s) => s.timeSkipCursor);
   const total = useStore((s) => s.timeSkipTotal);
+  const apiKey = useApiKey((s) => s.apiKey);
   const [now, setNow] = useState<Date | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   // Drag-preview percent. null = not dragging; number = playhead-during-drag.
-  // We only commit setAsOf on pointerup so we don't trigger a refetch storm.
+  // setAsOf is throttled during drag (see DRAG_THROTTLE_MS) so balances
+  // animate seamlessly without stampeding the network.
   const [dragPct, setDragPct] = useState<number | null>(null);
+  const lastAsOfCommitRef = useRef<number>(0);
+  const lastTickRef = useRef<number>(0);
 
   // Live clock for the LIVE/REPLAY indicator. Starts null so SSR + first
   // client render match — the timestamp populates on mount.
@@ -72,9 +89,19 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
   }
 
   function asOfFromPct(pct: number): Date | null {
-    if (pct >= 99.5) return null; // snap to LIVE near the right edge
+    // Snap-to-LIVE only when the user releases within the last 1% of the
+    // track — keeps "drag to rewind 30s" usable without the playhead
+    // bouncing back to NOW the moment they let go near the right edge.
+    if (pct >= 99) return null;
     const minutesBack = ((100 - pct) / 100) * SCRUB_WINDOW_MIN;
     return new Date(Date.now() - minutesBack * 60_000);
+  }
+
+  function commitAsOfForDrag(pct: number) {
+    const t = performance.now();
+    if (t - lastAsOfCommitRef.current < DRAG_THROTTLE_MS) return;
+    lastAsOfCommitRef.current = t;
+    setAsOf(asOfFromPct(pct));
   }
 
   function onTrackPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -83,42 +110,69 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
     // onClick handles the action; bubbling here would race with us.
     if (e.target !== e.currentTarget) return;
     trackRef.current?.setPointerCapture(e.pointerId);
-    setDragPct(pctFromEvent(e.clientX));
+    const pct = pctFromEvent(e.clientX);
+    setDragPct(pct);
+    // Reset throttle so the very first move commits immediately.
+    lastAsOfCommitRef.current = 0;
+    lastTickRef.current = 0;
+    commitAsOfForDrag(pct);
+    playTickIfUnmuted();
   }
   function onTrackPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (dragPct === null) return;
-    setDragPct(pctFromEvent(e.clientX));
+    const pct = pctFromEvent(e.clientX);
+    setDragPct(pct);
+    commitAsOfForDrag(pct);
+    const t = performance.now();
+    if (t - lastTickRef.current >= DRAG_TICK_MS) {
+      lastTickRef.current = t;
+      playTickIfUnmuted();
+    }
   }
   function onTrackPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (dragPct === null) return;
     const finalPct = pctFromEvent(e.clientX);
-    setAsOf(asOfFromPct(finalPct));
+    const finalAsOf = asOfFromPct(finalPct);
+    // Force-commit the final position (throttle would otherwise drop it).
+    lastAsOfCommitRef.current = 0;
+    setAsOf(finalAsOf);
     setDragPct(null);
     try {
       trackRef.current?.releasePointerCapture(e.pointerId);
     } catch {
       /* pointer already released — fine */
     }
+    // Auto-play forward from the released position. The user's mental model
+    // is "drop here, then play to NOW" — like a video scrubber. Skipped when
+    // the drop snapped to LIVE (finalAsOf=null) since there's nothing to play.
+    if (finalAsOf !== null) {
+      timeSkip.playFromAsOf();
+    }
   }
 
   const playheadPct = dragPct !== null ? dragPct : playheadPosition(asOf);
 
+  const replayCurl = `curl "${API_URL}/transactions?from=<5min_ago_iso>&to=<now_iso>" \\
+  -H "Authorization: Bearer ${apiKey ?? "<your_api_key>"}"`;
+
   return (
     <div className="flex h-20 items-center gap-4 border-t border-border bg-bg px-8">
       {/* Replay trigger — the cinematic CTA. Left of NOW for prominence. */}
-      <button
-        type="button"
-        onClick={() => timeSkip.replayLast(REPLAY_DEFAULT_MIN)}
-        disabled={isRewinding || isPlaying}
-        className={`num flex h-8 items-center justify-center border px-3 text-[11px] uppercase tracking-[0.14em] ${
-          isRewinding || isPlaying
-            ? "cursor-default border-border text-dim"
-            : "border-accent text-accent hover:bg-accent/10"
-        }`}
-        title="Replay the last 5 minutes"
-      >
-        ▶ REPLAY 5m
-      </button>
+      <CurlHint curl={replayCurl} align="left">
+        <button
+          type="button"
+          onClick={() => timeSkip.replayLast(REPLAY_DEFAULT_MIN)}
+          disabled={isRewinding || isPlaying}
+          className={`num flex h-8 items-center justify-center border px-3 text-[11px] uppercase tracking-[0.14em] ${
+            isRewinding || isPlaying
+              ? "cursor-default border-border text-dim"
+              : "border-accent text-accent hover:bg-accent/10"
+          }`}
+          title="Replay the last 5 minutes"
+        >
+          ▶ REPLAY 5m
+        </button>
+      </CurlHint>
 
       {/* Snap-to-NOW button. Looks like the previous prev/next but plays a
           different role: it's the "back to live" affordance. */}
@@ -220,20 +274,24 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
           );
         })}
 
-        {/* Playhead. While dragging, follows pointer in real time (no easing).
-            During rewind, glides over 600ms with ease-out-expo. Otherwise
-            eases over 300ms to the asOf position. */}
+        {/* Playhead. Wrapped in a wider invisible hit area so it's easy to
+            grab; the visible circle stays small but the user can drag from
+            ~40px around it. During rewind, glides over 600ms with
+            ease-out-expo. Otherwise eases over 300ms to the asOf position. */}
         <div
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 mix-blend-difference pointer-events-none"
+          onPointerDown={onTrackPointerDown}
+          onPointerMove={onTrackPointerMove}
+          onPointerUp={onTrackPointerUp}
+          onPointerCancel={onTrackPointerUp}
+          className={`absolute top-0 -translate-x-1/2 flex h-full w-10 items-center justify-center ${
+            presetsDisabled
+              ? "cursor-default"
+              : dragPct !== null
+                ? "cursor-grabbing"
+                : "cursor-grab"
+          }`}
           style={{
             left: `${playheadPct}%`,
-            width: 14,
-            height: 14,
-            borderRadius: 999,
-            background: "var(--bg)",
-            border: "1.5px solid var(--neon)",
-            boxShadow:
-              "0 0 12px rgba(34,211,238,0.6), 0 0 0 4px rgba(10,10,11,0.8)",
             transition:
               dragPct === null
                 ? isRewinding
@@ -241,7 +299,20 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
                   : STANDARD_TRANSITION
                 : undefined,
           }}
-        />
+        >
+          <div
+            className="mix-blend-difference pointer-events-none"
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: 999,
+              background: "var(--bg)",
+              border: "1.5px solid var(--neon)",
+              boxShadow:
+                "0 0 12px rgba(34,211,238,0.6), 0 0 0 4px rgba(10,10,11,0.8)",
+            }}
+          />
+        </div>
       </div>
 
       {/* Right-side status / orchestrator controls. Three modes:

@@ -121,6 +121,9 @@ export type Tenant = {
 export type SignupResponse = {
   tenant: Tenant;
   api_key: string;
+  // false when the email already existed and the backend rotated the key
+  // on the existing tenant; true on a fresh signup.
+  created: boolean;
   api_key_warning: string;
 };
 

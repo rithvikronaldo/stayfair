@@ -44,15 +44,23 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
         />
       )}
 
+      {/* Fundedness pip. Green = positive position (funded), amber = net
+          paid-out (e.g., treasury accounts that funded others into negative
+          territory — informational, not alarm), dim = empty or killed. The
+          per-event flash that used to flicker this amber was redundant with
+          the row pulse, so this is purely a position-state indicator now. */}
       <div
         className="absolute right-4 top-4 h-1.5 w-1.5"
+        title={fundednessTitle(agent.status, agent.balance)}
         style={{
           background:
             agent.status === "killed"
               ? "var(--dim)"
-              : agent.active
-                ? "var(--accent)"
-                : "var(--green)",
+              : agent.balance > 0
+                ? "var(--green)"
+                : agent.balance < 0
+                  ? "var(--accent)"
+                  : "var(--dim)",
         }}
       />
 
@@ -78,10 +86,27 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
       <Sparkline values={agent.history} active={agent.active} />
 
       <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1">
-        <Cell k="Available" v={fmtMinor(animatedAvailable)} />
-        <Cell k="On hold" v={fmtMinor(animatedOnHold)} accent={agent.on_hold > 0} />
-        <Cell k="Tx · 24h" v={agent.tx24h.toString()} />
-        <Cell k="Burn / hr" v={agent.burnPerHr.toFixed(2)} />
+        <Cell
+          k="Available"
+          v={fmtMinor(animatedAvailable)}
+          tip="Balance minus pending authorizations. The amount this account can authorize right now without overdrawing into its holds."
+        />
+        <Cell
+          k="On hold"
+          v={fmtMinor(animatedOnHold)}
+          accent={agent.on_hold > 0}
+          tip="Sum of pending authorizations against this account — money auth'd-out but not yet captured. Like a card-swipe hold at a gas pump."
+        />
+        <Cell
+          k="Tx · 24h"
+          v={agent.tx24h.toString()}
+          tip="Number of transactions touching this account in the last 24 hours. Computed from the loaded tx window (up to 1,000 events)."
+        />
+        <Cell
+          k="Burn / hr"
+          v={agent.burnPerHr.toFixed(2)}
+          tip="Net outflow rate from this account over the last hour, in major units per hour. How fast money is leaving."
+        />
       </div>
 
       {needsFunding && (
@@ -102,9 +127,19 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
   );
 }
 
-function Cell({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
+function Cell({
+  k,
+  v,
+  accent,
+  tip,
+}: {
+  k: string;
+  v: string;
+  accent?: boolean;
+  tip?: string;
+}) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-0.5" title={tip}>
       <span className="text-[10px] uppercase tracking-[0.1em] text-dim">
         {k}
       </span>
@@ -115,6 +150,13 @@ function Cell({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
       </span>
     </div>
   );
+}
+
+function fundednessTitle(status: string, balance: number): string {
+  if (status === "killed") return "Account killed";
+  if (balance > 0) return "Positive position · funded";
+  if (balance < 0) return "Negative position · net paid-out (funded others)";
+  return "Empty · zero balance";
 }
 
 function Sparkline({

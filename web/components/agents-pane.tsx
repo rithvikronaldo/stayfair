@@ -14,11 +14,11 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-8 items-center justify-between border-b border-border px-4">
-        <span className="text-[11px] uppercase tracking-[0.12em] text-muted">
+        <span
+          className="text-[11px] uppercase tracking-[0.12em] text-muted"
+          title={`${aliveCount} alive accounts of ${agents.length} total. Killed accounts stay in the ledger (transactions still reference them) but can no longer authorize or receive funds.`}
+        >
           {mode === "self" ? "Your accounts" : "Accounts"} · {aliveCount} / {agents.length}
-        </span>
-        <span className="num text-[10px] tracking-[0.1em] text-dim">
-          SORT · BAL ↓
         </span>
       </div>
 
@@ -28,10 +28,10 @@ export function AgentsPane({ agents }: { agents: AgentRow[] }) {
             {mode === "self" ? (
               <>
                 <div className="num mb-2 text-[10px] uppercase tracking-[0.12em] text-accent">
-                  your tenant — empty
+                  seeding your tenant…
                 </div>
-                Post your first transaction with the curl card above to see
-                it land here. Polls every 5s.
+                Eight accounts and a day of history are being staged. Should
+                land in a second.
               </>
             ) : (
               <>bootstrapping demo tenant…</>

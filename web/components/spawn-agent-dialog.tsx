@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { z } from "zod";
 
 import { api, ApiError, SUPPORTED_CURRENCIES, type Agent } from "@/lib/api";
+import { useApiKey } from "@/lib/api-key";
 import { DUR, EASE } from "@/lib/motion";
 import { useStore } from "@/lib/store";
 
@@ -30,6 +31,8 @@ export function SpawnAgentDialog({
   const [open, setOpen] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const mode = useStore((s) => s.mode);
+  const apiKey = useApiKey((s) => s.apiKey);
+  const signedIn = Boolean(apiKey);
 
   const {
     register,
@@ -56,7 +59,19 @@ export function SpawnAgentDialog({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <button className="flex h-8 w-full items-center justify-center border border-accent/40 bg-accent/10 text-[11px] uppercase tracking-[0.14em] text-accent transition-colors hover:bg-accent/20">
+        <button
+          disabled={!signedIn}
+          title={
+            signedIn
+              ? "Open a new account in your tenant"
+              : "Sign up for an API key to open accounts in your own tenant"
+          }
+          className={`flex h-8 w-full items-center justify-center border text-[11px] uppercase tracking-[0.14em] transition-colors ${
+            signedIn
+              ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
+              : "border-border bg-transparent text-dim cursor-not-allowed"
+          }`}
+        >
           + open account
         </button>
       </Dialog.Trigger>

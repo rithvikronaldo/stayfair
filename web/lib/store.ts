@@ -68,6 +68,10 @@ export type TxRow = {
   amount: number;
   capturedAmount?: number;
   currency: string;
+  // Set when the source-out and dest-in entries differ in currency — used by
+  // the transaction-stream FX filter chip. Optional so legacy rows default
+  // to false.
+  crossCurrency?: boolean;
   symbol: string;
   status: "pending" | "captured" | "voided";
   hash: string;
@@ -142,6 +146,10 @@ type Actions = {
   // applyPostedTransaction it does NOT touch balances — those are already
   // correct from the seed, so re-applying deltas would double-count.
   hydrateTxStream: (transactions: PostedTransaction[]) => void;
+  // recomputeAccountStats walks the given transactions and updates each
+  // agent's tx24h / burnPerHr. Self mode calls this on sign-in with the
+  // last 24h of activity so the agent-card metrics aren't stuck at 0.
+  recomputeAccountStats: (transactions: PostedTransaction[]) => void;
   // pushStressRows prepends a few just-committed rows during a stress run
   // (smooth trickle, no full-list replace). See implementation for why.
   pushStressRows: (transactions: PostedTransaction[]) => void;
@@ -161,14 +169,23 @@ const FLASH_MS = 900;
 let blockCounter = 1284562;
 let agentCounter = 0;
 
+// shortHash produces a Postgres-style abbreviated UUID for display: the
+// first 8 hex chars prefixed with `tx_`. The full UUID is the source of
+// truth — clicking the row in the feed copies it. We intentionally don't
+// dress this up to look like a blockchain hash (no `0x`, no `…`-elided
+// middle) because this is a Postgres ledger, not a chain.
 function shortHash(id: string): string {
-  const s = id.replace(/-/g, "");
-  return "0x" + s.slice(0, 4) + "…" + s.slice(-4);
+  return "tx_" + id.replace(/-/g, "").slice(0, 8);
 }
 
+// Sum of POSITIVE balances only, converted to USD. In a closed double-entry
+// tenant, sum(all balances) is exactly 0 by conservation — Post() enforces it
+// per transaction. Summing positives gives a useful "total funds held" KPI
+// (asset side) instead of the trivially-zero sum-of-everything.
 function recomputeTotal(agents: AgentRow[]): number {
   return agents.reduce(
-    (acc, a) => acc + a.balance * (FX_TO_USD[a.currency] ?? 1),
+    (acc, a) =>
+      a.balance > 0 ? acc + a.balance * (FX_TO_USD[a.currency] ?? 1) : acc,
     0,
   );
 }
@@ -179,19 +196,31 @@ function pushHistory(history: number[], next: number): number[] {
   return out;
 }
 
-function vendorFromDest(dest: string): string {
-  // dest is "vendor_pool_<ccy>" → "pool"
-  if (!dest) return "pool";
-  const m = dest.match(/^vendor_pool_/i);
-  if (m) return "vendor:pool";
-  if (dest.startsWith("agent_")) return dest.slice(0, 14);
-  return dest;
-}
-
-function inferVendorFromDescription(desc: string): string {
-  if (!desc) return "pool";
-  const m = desc.match(/(?:cp|vendor):(\w+)/i);
-  return m ? m[1] : "pool";
+// resolveDestLabel produces a human destination string from the dest entry's
+// account code. Order of preference:
+//   1) If the dest is one of our own agents → use the agent's NAME (e.g.
+//      "researcher1"). Honest about internal-to-internal transfers, which is
+//      what every self-mode stress / First Tick / user-posted tx actually is.
+//   2) If the description encodes "cp:foo" or "vendor:foo" → use foo. This
+//      keeps the simulator's narrative metadata visible when present.
+//   3) Demo-tenant convention "vendor_pool_<ccy>" → "vendor:pool" (preserved
+//      for the public dashboard).
+//   4) Anything else → first 14 chars (so we never spit raw UUIDs).
+// Previously the unconditional "cp:" prefix on every row mislabeled every
+// internal transfer as a counterparty payout, which read as theater on the
+// engineer-audience side.
+function resolveDestLabel(
+  destAccount: string,
+  description: string,
+  byCode: Map<string, AgentRow>,
+): string {
+  const destAgent = byCode.get(destAccount);
+  if (destAgent) return destAgent.name;
+  const narrative = description?.match(/(?:cp|vendor):(\w+)/i);
+  if (narrative) return `cp:${narrative[1]}`;
+  if (destAccount?.match(/^vendor_pool_/i)) return "cp:vendor-pool";
+  if (destAccount?.startsWith("agent_")) return destAccount.slice(0, 14);
+  return destAccount || "—";
 }
 
 // buildHistoryRow maps a settled PostedTransaction into a feed row WITHOUT
@@ -213,12 +242,11 @@ function buildHistoryRow(
     agentCode: sourceAgent?.code ?? "?",
     agentName: sourceAgent?.name ?? "account",
     agentAccountCode: sourceEntry.account,
-    vendor:
-      inferVendorFromDescription(tx.description) ||
-      vendorFromDest(destEntry.account),
+    vendor: resolveDestLabel(destEntry.account, tx.description, byCode),
     amount: sourceEntry.amount,
     capturedAmount: sourceEntry.amount,
     currency: sourceEntry.currency,
+    crossCurrency: sourceEntry.currency !== destEntry.currency,
     symbol: SYMBOLS[sourceEntry.currency] ?? "$",
     status: "captured",
     hash: shortHash(tx.id),
@@ -268,9 +296,16 @@ export const useStore = create<State & Actions>()((set, get) => ({
     }),
 
   initFromBackend: (agents, balances) => {
+    // Preserve any previously-computed per-account stats so the 5s self-mode
+    // poll (which re-calls initFromBackend each cycle) doesn't blow away
+    // tx24h/burnPerHr that recomputeAccountStats already populated. Without
+    // this, the agent cards permanently read 0 after the first poll cycle.
+    const prevByCode = new Map(get().agents.map((a) => [a.accountCode, a]));
+
     const rows: AgentRow[] = agents.map((a, i) => {
       const bal = balances[a.account_code];
       const balance = bal?.balance ?? a.balance;
+      const prev = prevByCode.get(a.account_code);
       return {
         id: a.id,
         code: `A-${i + 1}`,
@@ -282,9 +317,9 @@ export const useStore = create<State & Actions>()((set, get) => ({
         balance,
         available: bal?.available ?? balance,
         on_hold: bal?.on_hold ?? 0,
-        history: Array(24).fill(balance),
-        tx24h: 0,
-        burnPerHr: 0,
+        history: prev?.history ?? Array(24).fill(balance),
+        tx24h: prev?.tx24h ?? 0,
+        burnPerHr: prev?.burnPerHr ?? 0,
         flash: null,
         flashUntil: 0,
         active: false,
@@ -348,9 +383,11 @@ export const useStore = create<State & Actions>()((set, get) => ({
       agentCode: sourceAgent?.code ?? "?",
       agentName: sourceAgent?.name ?? "agent",
       agentAccountCode: auth.source_account,
-      vendor:
-        inferVendorFromDescription(auth.description) ||
-        vendorFromDest(auth.dest_account),
+      vendor: resolveDestLabel(
+        auth.dest_account,
+        auth.description,
+        new Map(get().agents.map((a) => [a.accountCode, a])),
+      ),
       amount: auth.amount,
       currency: auth.currency,
       symbol: SYMBOLS[auth.currency] ?? "$",
@@ -438,9 +475,13 @@ export const useStore = create<State & Actions>()((set, get) => ({
         agentCode: sourceAgent?.code ?? "?",
         agentName: sourceAgent?.name ?? "agent",
         agentAccountCode: sourceEntry.account,
-        vendor:
-          inferVendorFromDescription(tx.description) ||
-          (destEntry ? vendorFromDest(destEntry.account) : "pool"),
+        vendor: destEntry
+          ? resolveDestLabel(
+              destEntry.account,
+              tx.description,
+              new Map(get().agents.map((a) => [a.accountCode, a])),
+            )
+          : "—",
         amount: captured,
         capturedAmount: captured,
         currency: sourceEntry.currency,
@@ -563,9 +604,11 @@ export const useStore = create<State & Actions>()((set, get) => ({
         agentCode: sourceAgent?.code ?? "?",
         agentName: sourceAgent?.name ?? "agent",
         agentAccountCode: sourceEntry.account,
-        vendor:
-          inferVendorFromDescription(tx.description) ||
-          vendorFromDest(destEntry.account),
+        vendor: resolveDestLabel(
+          destEntry.account,
+          tx.description,
+          new Map(get().agents.map((a) => [a.accountCode, a])),
+        ),
         amount: sourceEntry.amount,
         capturedAmount: sourceEntry.amount,
         currency: sourceEntry.currency,
@@ -636,9 +679,11 @@ export const useStore = create<State & Actions>()((set, get) => ({
         agentCode: sourceAgent?.code ?? "?",
         agentName: sourceAgent?.name ?? "agent",
         agentAccountCode: sourceEntry.account,
-        vendor:
-          inferVendorFromDescription(tx.description) ||
-          vendorFromDest(destEntry.account),
+        vendor: resolveDestLabel(
+          destEntry.account,
+          tx.description,
+          new Map(get().agents.map((a) => [a.accountCode, a])),
+        ),
         amount: sourceEntry.amount,
         capturedAmount: sourceEntry.amount,
         currency: sourceEntry.currency,
@@ -664,6 +709,44 @@ export const useStore = create<State & Actions>()((set, get) => ({
       totalUsd,
       totalFlash,
       totalFlashUntil: now + FLASH_MS,
+    });
+  },
+
+  recomputeAccountStats: (transactions) => {
+    const now = Date.now();
+    const hourAgo = now - 3600_000;
+    const dayAgo = now - 86400_000;
+
+    type Acc = { txIds: Set<string>; outMinorLastHour: number };
+    const byCode = new Map<string, Acc>();
+
+    for (const tx of transactions) {
+      const ts = new Date(tx.occurred_at).getTime();
+      if (ts < dayAgo) continue;
+      for (const e of tx.entries) {
+        let acc = byCode.get(e.account);
+        if (!acc) {
+          acc = { txIds: new Set(), outMinorLastHour: 0 };
+          byCode.set(e.account, acc);
+        }
+        acc.txIds.add(tx.id);
+        if (ts >= hourAgo && e.direction === "out") {
+          acc.outMinorLastHour += e.amount;
+        }
+      }
+    }
+
+    set({
+      agents: get().agents.map((a) => {
+        const stats = byCode.get(a.accountCode);
+        return {
+          ...a,
+          tx24h: stats?.txIds.size ?? 0,
+          // Major units / hour. The 1h window is fixed; if the tenant is
+          // newer than that we under-report but never over-report.
+          burnPerHr: (stats?.outMinorLastHour ?? 0) / 100,
+        };
+      }),
     });
   },
 

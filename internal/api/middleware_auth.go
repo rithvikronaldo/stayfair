@@ -15,17 +15,23 @@ import (
 // every handler reads. Exported via TenantID(c).
 const tenantIDLocal = "tenant_id"
 
+// authenticatedLocal is true when the request had a valid Bearer token.
+// Anonymous requests (no header → demo-tenant fallback) leave it false so
+// RequireAuth can reject mutations from anonymous visitors of the public
+// dashboard. Read by IsAuthenticated(c).
+const authenticatedLocal = "authenticated"
+
 const bearerPrefix = "Bearer "
 
 // TenantAuth resolves the request's tenant before any handler runs.
 //
 // Behaviour:
-//   - No Authorization header → resolves to the demo tenant (DemoTenantID).
-//     This keeps the public dashboard working without signup. The demo
-//     tenant is intentionally world-readable; mutations against it are
-//     also allowed — that's the sandbox.
+//   - No Authorization header → resolves to the demo tenant (DemoTenantID),
+//     authenticated=false. Public dashboard READS work. Mutating endpoints
+//     gated by RequireAuth will 401 — anonymous visitors can't stress-test
+//     or post into the demo tenant.
 //   - Authorization: Bearer <key> → SHA-256 the key, look up the tenant,
-//     scope the request to that tenant_id.
+//     scope the request to that tenant_id, authenticated=true.
 //   - Authorization present but malformed or unknown key → 401.
 //
 // Application-scoping over RLS:
@@ -42,10 +48,11 @@ func TenantAuth(pool *pgxpool.Pool) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		header := c.Get(fiber.HeaderAuthorization)
 
-		// Unauthenticated → default to demo tenant. Public dashboard reads
-		// + sandbox writes from anonymous visitors land here.
+		// Unauthenticated → default to demo tenant for read paths. Mutating
+		// endpoints sit behind RequireAuth which 401s on authenticated=false.
 		if header == "" {
 			c.Locals(tenantIDLocal, ledger.DemoTenantID)
+			c.Locals(authenticatedLocal, false)
 			return c.Next()
 		}
 
@@ -71,6 +78,34 @@ func TenantAuth(pool *pgxpool.Pool) fiber.Handler {
 		}
 
 		c.Locals(tenantIDLocal, t.ID)
+		c.Locals(authenticatedLocal, true)
+		return c.Next()
+	}
+}
+
+// IsAuthenticated reports whether the current request carried a valid
+// Bearer token. Anonymous requests (no header → demo-tenant fallback)
+// return false. Used by RequireAuth and any handler that wants to vary
+// behaviour by signin state.
+func IsAuthenticated(c *fiber.Ctx) bool {
+	v := c.Locals(authenticatedLocal)
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
+}
+
+// RequireAuth 401s anonymous requests. Apply to every mutating endpoint
+// so the public dashboard's demo-tenant fallback can't be used to vandalise
+// the demo from anonymous visitors of acta.rithvikronaldo.dev.
+func RequireAuth() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if !IsAuthenticated(c) {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error":   "authentication_required",
+				"message": "this endpoint requires a Bearer token — sign up at POST /tenants to get one",
+			})
+		}
 		return c.Next()
 	}
 }

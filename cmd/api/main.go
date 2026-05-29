@@ -29,6 +29,13 @@ func main() {
 	broadcaster := events.New(64)
 	app := api.New(pool, broadcaster)
 
+	// Server-side demo simulator: continuously animates the demo tenant so
+	// anonymous visitors of the public dashboard see live activity within
+	// seconds of landing. Runs until simCtx is cancelled by shutdown.
+	simCtx, simCancel := context.WithCancel(context.Background())
+	defer simCancel()
+	api.StartDemoSimulator(simCtx, pool, broadcaster)
+
 	go func() {
 		log.Printf("listening on :%s", cfg.Port)
 		if err := app.Listen(":" + cfg.Port); err != nil {
@@ -41,5 +48,6 @@ func main() {
 	<-stop
 
 	log.Println("shutting down")
+	simCancel()
 	_ = app.ShutdownWithTimeout(5 * time.Second)
 }

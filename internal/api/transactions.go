@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -187,6 +188,7 @@ func mapLedgerError(err error) (int, fiber.Map) {
 	if errors.As(err, &imb) {
 		return fiber.StatusUnprocessableEntity, fiber.Map{
 			"error":    "unbalanced",
+			"message":  fmt.Sprintf("transaction unbalanced in %s: in=%d, out=%d, diff=%d", imb.Currency, imb.In, imb.Out, imb.In-imb.Out),
 			"currency": imb.Currency,
 			"in":       imb.In,
 			"out":      imb.Out,

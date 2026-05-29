@@ -126,9 +126,9 @@ export function TakeOffChart({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
                     Stress · Take-Off
                   </span>
                   <span className="num text-[11px] tracking-[0.1em] text-dim">
-                    n = {n.toLocaleString()}{isDone && result.currency ? ` · ${result.currency}` : ""}
+                    n = {n.toLocaleString("en-US")}{isDone && result.currency ? ` · ${result.currency}` : ""}
                     {isDone && result.serialization_retries > 0
-                      ? ` · ${result.serialization_retries.toLocaleString()} retries`
+                      ? ` · ${result.serialization_retries.toLocaleString("en-US")} retries`
                       : ""}
                   </span>
                 </div>
@@ -148,7 +148,7 @@ export function TakeOffChart({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
               <div className="num mt-2 flex h-4 items-center gap-2 text-[11px] tracking-[0.1em]">
                 {isDone ? (
                   <span className="text-neon">
-                    ✓ committed {result.n_posted.toLocaleString()} real txns in{" "}
+                    ✓ committed {result.n_posted.toLocaleString("en-US")} real txns in{" "}
                     {(result.elapsed_ms / 1000).toFixed(2)}s · books balance to 0
                     · see them in the feed →
                   </span>
@@ -156,7 +156,7 @@ export function TakeOffChart({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
                   <span className="flex items-center gap-2 text-accent">
                     <span className="live-breathe inline-block h-1.5 w-1.5 rounded-full bg-accent" />
                     committing to Postgres in batches —{" "}
-                    {posted.toLocaleString()}/{n.toLocaleString()} landed…
+                    {posted.toLocaleString("en-US")}/{n.toLocaleString("en-US")} landed…
                   </span>
                 )}
               </div>
@@ -308,7 +308,7 @@ function StatsRow({
   // settle on completion, so they stay dimmed ("—") until done.
   return (
     <div className="mt-3 grid grid-cols-5 gap-3 border-t border-border-2 pt-3">
-      <Stat label="posted" value={Math.round(animatedPosted).toLocaleString()} />
+      <Stat label="posted" value={Math.round(animatedPosted).toLocaleString("en-US")} />
       <Stat label="tps" value={animatedTps.toFixed(animatedTps < 100 ? 1 : 0)} />
       <Stat label="p50 commit" value={`${animatedP50.toFixed(1)} ms`} dim={running} />
       <Stat label="p99 commit" value={`${animatedP99.toFixed(1)} ms`} dim={running} />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
@@ -7,10 +8,90 @@ import { fmtAge, fmtMinor } from "@/lib/format";
 import { useStore, type TxRow } from "@/lib/store";
 import { DUR, EASE } from "@/lib/motion";
 
+type Filter = "all" | "pending" | "captured" | "voided" | "fx";
+
+const FILTERS: { id: Filter; label: string; tip: string }[] = [
+  { id: "all", label: "All", tip: "Every transaction in the loaded window, regardless of status or currency." },
+  {
+    id: "pending",
+    label: "Pending",
+    tip: "Authorizations that have been created but not yet captured. Available balance is reduced; the balance itself doesn't move until capture.",
+  },
+  {
+    id: "captured",
+    label: "Captured",
+    tip: "Authorizations that settled — entries are written, balances moved. Captured transactions are immutable from this point.",
+  },
+  {
+    id: "voided",
+    label: "Voided",
+    tip: "Authorizations that were explicitly cancelled before capture. Reserved funds are released back to available balance; no entries are written.",
+  },
+  {
+    id: "fx",
+    label: "FX",
+    tip: "Cross-currency transactions where source and destination accounts are in different currencies. Conversion happens at the FX rate stored in the entries at posting time.",
+  },
+];
+
+function matches(tx: TxRow, f: Filter): boolean {
+  switch (f) {
+    case "all":
+      return true;
+    case "pending":
+      return tx.status === "pending";
+    case "captured":
+      return tx.status === "captured";
+    case "voided":
+      return tx.status === "voided";
+    case "fx":
+      return tx.crossCurrency === true;
+  }
+}
+
+// Compact integer formatter: 4 → "4", 4521 → "4.5k", 1234567 → "1.2m".
+function fmtCount(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(n < 10_000 ? 1 : 0) + "k";
+  return (n / 1_000_000).toFixed(1) + "m";
+}
+
 export function TransactionStream({ txs }: { txs: TxRow[] }) {
   const nowMs = Date.now();
   const tps = txs.filter((t) => nowMs - t.ts < 1000).length;
   const mode = useStore((s) => s.mode);
+  const [filter, setFilter] = useState<Filter>("all");
+
+  // Per-filter counts + the Pending KPI (outstanding amount across all
+  // pending rows in the loaded window). Single pass over the array so we
+  // don't re-walk it five times.
+  const stats = useMemo(() => {
+    const counts: Record<Filter, number> = {
+      all: txs.length,
+      pending: 0,
+      captured: 0,
+      voided: 0,
+      fx: 0,
+    };
+    let pendingOutstandingMinor = 0;
+    for (const t of txs) {
+      if (t.status === "pending") {
+        counts.pending++;
+        pendingOutstandingMinor += t.amount;
+      } else if (t.status === "captured") {
+        counts.captured++;
+      } else if (t.status === "voided") {
+        counts.voided++;
+      }
+      if (t.crossCurrency) counts.fx++;
+    }
+    return { counts, pendingOutstandingMinor };
+  }, [txs]);
+
+  const visible = useMemo(
+    () => (filter === "all" ? txs : txs.filter((t) => matches(t, filter))),
+    [txs, filter],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -24,32 +105,73 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
       </div>
 
       <div className="flex h-7 border-b border-border">
-        {["All", "Inflow", "Outflow", "Hold", "FX"].map((f, i) => (
-          <div
-            key={f}
-            className={`flex flex-1 items-center justify-center border-r border-border-2 text-[10px] uppercase tracking-[0.14em] last:border-r-0 ${
-              i === 0 ? "bg-surface-1 text-fg" : "text-dim"
-            }`}
-          >
-            {f}
-          </div>
-        ))}
+        {FILTERS.map((f) => {
+          const active = filter === f.id;
+          const count = stats.counts[f.id];
+          const muted = count === 0 && !active;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              aria-pressed={active}
+              title={f.tip}
+              className={`flex flex-1 items-center justify-center gap-1.5 border-r border-border-2 text-[10px] uppercase tracking-[0.14em] last:border-r-0 transition-colors ${
+                active
+                  ? "bg-surface-1 text-fg"
+                  : muted
+                    ? "text-dim/50 hover:text-dim"
+                    : "text-dim hover:bg-surface-2/40 hover:text-muted"
+              }`}
+            >
+              <span>{f.label}</span>
+              <span
+                className={`num tracking-[0.05em] ${
+                  active ? "text-accent" : ""
+                }`}
+              >
+                {fmtCount(count)}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      {stats.counts.pending > 0 && (
+        <div className="num flex h-6 items-center justify-between border-b border-border-2 bg-surface-2/30 px-4 text-[10px] tracking-[0.12em]">
+          <span className="text-dim">
+            {stats.counts.pending} hold{stats.counts.pending === 1 ? "" : "s"}{" "}
+            outstanding
+          </span>
+          <span className="text-accent">
+            ${fmtMinor(stats.pendingOutstandingMinor)}
+          </span>
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {txs.length === 0 && mode === "self" ? (
+        {visible.length === 0 && mode === "self" ? (
           <div className="px-4 py-6 text-[11px] leading-relaxed text-muted">
             <div className="num mb-2 text-[10px] uppercase tracking-[0.12em] text-accent">
-              your stream — empty
+              {filter === "all" ? "your stream — empty" : `no ${filter} txs`}
             </div>
-            Post a transfer — use <span className="text-fg">＋ New</span> in
-            the top bar or <span className="text-fg">Fund this account</span>{" "}
-            on any empty account — and it&apos;ll appear here within a few
-            seconds.
+            {filter === "all" ? (
+              <>
+                Post a transfer — use <span className="text-fg">＋ New</span> in
+                the top bar or{" "}
+                <span className="text-fg">Fund this account</span> on any empty
+                account — and it&apos;ll appear here within a few seconds.
+              </>
+            ) : (
+              <>
+                Nothing matched the <span className="text-fg">{filter}</span>{" "}
+                filter in the loaded window.
+              </>
+            )}
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            {txs.map((tx) => (
+            {visible.map((tx) => (
               <Row key={tx.id} tx={tx} />
             ))}
           </AnimatePresence>
@@ -57,8 +179,16 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
       </div>
 
       <div className="num flex h-7 items-center justify-between border-t border-border px-4 text-[10px] tracking-[0.1em] text-dim">
-        <span>Showing {txs.length} / 1,247</span>
-        <span>Lag · 12 ms</span>
+        <span>
+          {visible.length === 0
+            ? "—"
+            : filter === "all"
+              ? `Showing ${visible.length}`
+              : `Showing ${visible.length} / ${txs.length}`}
+        </span>
+        <span>
+          {visible.length > 0 ? `last · ${fmtAge(nowMs - visible[0].ts)}` : ""}
+        </span>
       </div>
     </div>
   );
@@ -141,18 +271,17 @@ function Row({ tx }: { tx: TxRow }) {
         </div>
         <div className="num mt-1 truncate text-[11px] tracking-wide text-muted">
           {tx.agentCode} · {tx.agentName}{" "}
-          <span className="mx-1 text-dim">→</span> cp:{tx.vendor}
+          <span className="mx-1 text-dim">→</span> {tx.vendor}
         </div>
         <div className="num mt-0.5 truncate text-[9px] tracking-wide text-dim">
           <button
             type="button"
             onClick={() => copyTxId(tx)}
             className="cursor-pointer hover:text-muted"
-            title="Copy transaction ID"
+            title="Copy full transaction ID"
           >
             {tx.hash}
-          </button>{" "}
-          · block {tx.block.toLocaleString()}
+          </button>
         </div>
       </div>
 

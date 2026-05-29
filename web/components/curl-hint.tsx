@@ -11,17 +11,19 @@ export function CurlHint({
   curl,
   children,
   align = "right",
+  block = false,
 }: {
   curl: string;
   children: React.ReactNode;
   align?: "left" | "right";
+  block?: boolean;
 }) {
   const on = useCodeMode((s) => s.on);
   const [hover, setHover] = useState(false);
 
   return (
     <span
-      className="relative inline-flex"
+      className={`relative ${block ? "block" : "inline-flex"}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >

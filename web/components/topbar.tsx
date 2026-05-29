@@ -16,25 +16,11 @@ export function TopBar({
   agentCount,
   ccyCount,
   txCount,
-  block,
 }: {
   agentCount: number;
   ccyCount: number;
   txCount: number;
-  block: number;
 }) {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 200);
-    return () => clearInterval(id);
-  }, []);
-
-  const hh = now?.getUTCHours().toString().padStart(2, "0") ?? "--";
-  const mm = now?.getUTCMinutes().toString().padStart(2, "0") ?? "--";
-  const ss = now?.getUTCSeconds().toString().padStart(2, "0") ?? "--";
-  const ms = now?.getUTCMilliseconds().toString().padStart(3, "0") ?? "---";
-
   return (
     <header className="relative flex h-10 items-center border-b border-border bg-bg">
       <Group>
@@ -48,20 +34,21 @@ export function TopBar({
       </Group>
 
       <Group>
-        <span className="num text-[11px] uppercase tracking-[0.1em] text-dim">
-          LEDGER · BLOCK {block.toLocaleString()}
-        </span>
-      </Group>
-
-      <Group>
-        <span className="num text-[11px] uppercase tracking-[0.1em] text-dim">
+        <span
+          className="num text-[11px] uppercase tracking-[0.1em] text-dim"
+          title="Double-entry bookkeeping: every transaction posts two or more entries that sum to zero. USD is the base currency — non-USD balances are FX-converted to USD at the as-of timestamp for the headline total."
+        >
           DOUBLE-ENTRY · USD BASE
         </span>
       </Group>
 
       <Group>
-        <span className="num text-[11px] uppercase tracking-[0.1em] text-dim">
-          {agentCount} ACCOUNTS · {ccyCount} CCY · {txCount.toLocaleString()} TX
+        <span
+          className="num text-[11px] uppercase tracking-[0.1em] text-dim"
+          title={`${agentCount} alive account${agentCount === 1 ? "" : "s"} in your tenant · ${ccyCount} distinct currenc${ccyCount === 1 ? "y" : "ies"} · ${txCount} transaction${txCount === 1 ? "" : "s"} currently in the live feed buffer (capped at 30 — not your tenant's total tx count)`}
+        >
+          {agentCount} ACCOUNTS · {ccyCount} CCY · FEED{" "}
+          {txCount.toLocaleString("en-US")}
         </span>
       </Group>
 
@@ -72,32 +59,42 @@ export function TopBar({
         <CmdKButton />
         <CodeModeToggle />
         <StressButton />
-        <Pill tone="dim">
-          <span className="h-1.5 w-1.5 bg-dim" />
-          Replay · idle
-        </Pill>
       </Group>
 
       <Group>
-        <Pill tone="amber">
-          <span className="h-1.5 w-1.5 bg-accent" />
-          <span className="num">
-            LIVE · {hh}:{mm}:{ss}.{ms}
-          </span>
-        </Pill>
+        <LivePill />
         <SoundToggle />
-        <IconBtn>
-          <svg width="10" height="10" viewBox="0 0 10 10">
-            <circle cx="5" cy="5" r="1.4" fill="currentColor" />
-            <path
-              d="M5 1v1.4M5 7.6V9M1 5h1.4M7.6 5H9M2.2 2.2l1 1M6.8 6.8l1 1M2.2 7.8l1-1M6.8 3.2l1-1"
-              stroke="currentColor"
-              strokeWidth="0.8"
-            />
-          </svg>
-        </IconBtn>
       </Group>
     </header>
+  );
+}
+
+// LivePill owns its own ticking clock so the rest of the topbar
+// (and its memo-resistant grandchildren like StressButton / SoundToggle)
+// is not re-rendered five times a second.
+function LivePill() {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 200);
+    return () => clearInterval(id);
+  }, []);
+
+  const hh = now?.getUTCHours().toString().padStart(2, "0") ?? "--";
+  const mm = now?.getUTCMinutes().toString().padStart(2, "0") ?? "--";
+  const ss = now?.getUTCSeconds().toString().padStart(2, "0") ?? "--";
+  const ms = now?.getUTCMilliseconds().toString().padStart(3, "0") ?? "---";
+
+  return (
+    <Pill tone="amber">
+      <span className="h-1.5 w-1.5 bg-accent" />
+      <span
+        className="num"
+        title="Live mode · UTC wall-clock. The dashboard polls /agents and /balance every 5 seconds; the scrubber and ▶ REPLAY 5m switch into historical (as_of) mode and pause polling."
+      >
+        LIVE · {hh}:{mm}:{ss}.{ms}
+      </span>
+    </Pill>
   );
 }
 
@@ -106,26 +103,34 @@ function StressButton() {
   const apiKey = useApiKey((s) => s.apiKey);
   const phase = useStore((s) => s.stressPhase);
   const running = phase === "running";
+  const signedIn = Boolean(apiKey);
   const curl = `curl -X POST ${API_URL}/stress \\
   -H "Authorization: Bearer ${apiKey ?? "<your_api_key>"}" \\
   -H "Content-Type: application/json" \\
   -d '{"n": ${STRESS_DEFAULT_N}}'`;
+  const disabled = running || !signedIn;
   return (
     <CurlHint curl={curl}>
       <button
         type="button"
         onClick={() => stress.run(STRESS_DEFAULT_N)}
-        disabled={running}
-        title="Bulk-post 1,000 balanced transactions"
+        disabled={disabled}
+        title={
+          !signedIn
+            ? "Sign up for an API key to run a stress test on your own tenant"
+            : running
+              ? "Stress test running"
+              : "Bulk-post 1,000 balanced transactions to your tenant"
+        }
         className={`num inline-flex h-6 items-center gap-2 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
-          running
-            ? "border-border text-dim cursor-default"
+          disabled
+            ? "border-border text-dim cursor-not-allowed"
             : "border-accent text-accent hover:bg-accent/10"
         }`}
       >
         <span
           className="h-1.5 w-1.5"
-          style={{ background: running ? "var(--dim)" : "var(--accent)" }}
+          style={{ background: disabled ? "var(--dim)" : "var(--accent)" }}
         />
         {running ? "Stress · running" : "▶ Stress 1k"}
       </button>
@@ -135,12 +140,23 @@ function StressButton() {
 
 function NewButton() {
   const openDialog = useActionDialog((s) => s.openDialog);
+  const apiKey = useApiKey((s) => s.apiKey);
+  const signedIn = Boolean(apiKey);
   return (
     <button
       type="button"
-      onClick={() => openDialog("post")}
-      title="Spawn an account or post a transaction"
-      className="num inline-flex h-6 items-center gap-1.5 border border-border px-2.5 text-[11px] uppercase tracking-[0.1em] text-muted hover:text-fg"
+      onClick={() => signedIn && openDialog("post")}
+      disabled={!signedIn}
+      title={
+        signedIn
+          ? "Spawn an account or post a transaction"
+          : "Sign up for an API key to spawn accounts or post transactions"
+      }
+      className={`num inline-flex h-6 items-center gap-1.5 border px-2.5 text-[11px] uppercase tracking-[0.1em] ${
+        signedIn
+          ? "border-border text-muted hover:text-fg"
+          : "border-border text-dim cursor-not-allowed"
+      }`}
     >
       + New
     </button>
@@ -209,13 +225,3 @@ function Pill({
   );
 }
 
-function IconBtn({ children }: { children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="flex h-6 w-6 items-center justify-center border border-border text-muted hover:text-fg"
-    >
-      {children}
-    </button>
-  );
-}

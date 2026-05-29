@@ -18,7 +18,7 @@ type ListTransactionsFilter struct {
 	AccountCode string     // include only transactions touching this account
 	From        *time.Time // occurred_at >= From (inclusive)
 	To          *time.Time // occurred_at <= To (inclusive)
-	Limit       int        // max rows; clamped to [1, 200]; 50 if zero
+	Limit       int        // max rows; clamped to [1, 1000]; 50 if zero
 	Cursor      string     // opaque pagination token from a previous response
 }
 
@@ -53,8 +53,8 @@ func ListTransactions(
 	if limit <= 0 {
 		limit = 50
 	}
-	if limit > 200 {
-		limit = 200
+	if limit > 1000 {
+		limit = 1000
 	}
 
 	var cursorOccurred time.Time

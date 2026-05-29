@@ -26,7 +26,7 @@ func TestCrossTenantIsolation(t *testing.T) {
 	tenantA := DemoTenantID
 
 	// Tenant B: fresh, no rows under it yet.
-	tenantB, _, err := CreateTenant(
+	tenantB, _, _, err := CreateTenant(
 		ctx, pool,
 		fmt.Sprintf("test-%d@example.com", time.Now().UnixNano()),
 		"Cross-Tenant Test",
@@ -83,7 +83,7 @@ func TestCaptureCrossTenantRejected(t *testing.T) {
 	})
 
 	// Create tenant B.
-	tenantB, _, err := CreateTenant(
+	tenantB, _, _, err := CreateTenant(
 		ctx, pool,
 		fmt.Sprintf("test-cap-%d@example.com", time.Now().UnixNano()),
 		"Cross-Tenant Capture Test",
@@ -114,7 +114,7 @@ func TestAuthorizeCrossTenantRejected(t *testing.T) {
 	ctx := context.Background()
 	orgID := uuid.MustParse(demoOrgID)
 
-	tenantB, _, err := CreateTenant(
+	tenantB, _, _, err := CreateTenant(
 		ctx, pool,
 		fmt.Sprintf("test-auth-%d@example.com", time.Now().UnixNano()),
 		"Cross-Tenant Authorize Test",
@@ -162,7 +162,7 @@ func TestVoidCrossTenantRejected(t *testing.T) {
 		pool.Exec(context.Background(), `DELETE FROM authorizations WHERE id = $1`, auth.ID)
 	})
 
-	tenantB, _, err := CreateTenant(
+	tenantB, _, _, err := CreateTenant(
 		ctx, pool,
 		fmt.Sprintf("test-void-%d@example.com", time.Now().UnixNano()),
 		"Cross-Tenant Void Test",
@@ -203,7 +203,7 @@ func TestGetBalanceCrossTenantRejected(t *testing.T) {
 	ctx := context.Background()
 	orgID := uuid.MustParse(demoOrgID)
 
-	tenantB, _, err := CreateTenant(
+	tenantB, _, _, err := CreateTenant(
 		ctx, pool,
 		fmt.Sprintf("test-bal-%d@example.com", time.Now().UnixNano()),
 		"Cross-Tenant Balance Test",

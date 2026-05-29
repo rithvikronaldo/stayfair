@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { useActionDialog } from "@/lib/action-dialog";
+import { useApiKey } from "@/lib/api-key";
 import { useCaptureFlow } from "@/lib/capture";
 import { useCommandPalette } from "@/lib/command-palette";
 import { DUR, EASE } from "@/lib/motion";
@@ -15,6 +16,11 @@ type Command = {
   id: string;
   label: string;
   hint?: string; // shortcut key or short note, shown right-aligned
+  // requiresAuth=true commands mutate the ledger and are hidden when the
+  // user isn't signed in. The backend gates these too (401 without Bearer);
+  // hiding from the palette is the UX layer that prevents anonymous
+  // visitors from finding them at all.
+  requiresAuth?: boolean;
   run: () => void;
 };
 
@@ -26,52 +32,61 @@ export function CommandPalette({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
   const openDialog = useActionDialog((s) => s.openDialog);
   const muted = useSound((s) => s.muted);
   const toggleSound = useSound((s) => s.toggle);
+  const apiKey = useApiKey((s) => s.apiKey);
+  const signedIn = Boolean(apiKey);
 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands: Command[] = useMemo(
-    () => [
-      {
-        id: "replay",
-        label: "Replay the last 5 minutes",
-        hint: "R",
-        run: () => timeSkip.replayLast(5),
-      },
-      {
-        id: "stress",
-        label: "Stress-test · 1,000 transactions",
-        hint: "S",
-        run: () => stress.run(STRESS_DEFAULT_N),
-      },
-      {
-        id: "capture",
-        label: "Capture the pending authorization",
-        run: () => void capture.capturePending(),
-      },
-      {
-        id: "post",
-        label: "Post a transaction…",
-        run: () => openDialog("post"),
-      },
-      {
-        id: "spawn",
-        label: "Spawn an account…",
-        run: () => openDialog("spawn"),
-      },
-      {
-        id: "live",
-        label: "Back to LIVE (snap to now)",
-        run: () => timeSkip.snapToNow(),
-      },
-      {
-        id: "sound",
-        label: muted ? "Unmute sound" : "Mute sound",
-        run: () => toggleSound(),
-      },
-    ],
-    [timeSkip, stress, capture, openDialog, muted, toggleSound],
+    () =>
+      (
+        [
+          {
+            id: "replay",
+            label: "Replay the last 5 minutes",
+            hint: "R",
+            run: () => timeSkip.replayLast(5),
+          },
+          {
+            id: "stress",
+            label: "Stress-test · 1,000 transactions",
+            hint: "S",
+            requiresAuth: true,
+            run: () => stress.run(STRESS_DEFAULT_N),
+          },
+          {
+            id: "capture",
+            label: "Capture the pending authorization",
+            requiresAuth: true,
+            run: () => void capture.capturePending(),
+          },
+          {
+            id: "post",
+            label: "Post a transaction…",
+            requiresAuth: true,
+            run: () => openDialog("post"),
+          },
+          {
+            id: "spawn",
+            label: "Spawn an account…",
+            requiresAuth: true,
+            run: () => openDialog("spawn"),
+          },
+          {
+            id: "live",
+            label: "Back to LIVE (snap to now)",
+            run: () => timeSkip.snapToNow(),
+          },
+          {
+            id: "sound",
+            label: muted ? "Unmute sound" : "Mute sound",
+            run: () => toggleSound(),
+          },
+        ] as Command[]
+      ).filter((c) => signedIn || !c.requiresAuth),
+    [timeSkip, stress, capture, openDialog, muted, toggleSound, signedIn],
   );
 
   const filtered = useMemo(() => {

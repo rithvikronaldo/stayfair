@@ -16,9 +16,11 @@ import { useStore } from "@/lib/store";
 //     queue yet — they're a richer story but the cinematic narrative reads
 //     fine with txs alone, and the SSE event types can be folded in later if
 //     Friday's polish demands it.
-//   - Single-page fetch (limit=200). The seed produces 100 txs; live activity
-//     between as_of and now is typically a handful. Pagination is a refinement
-//     for if/when a tenant accumulates >200 events in their replay window.
+//   - Single-page fetch (limit=1000 — the backend's hard cap). High-traffic
+//     tenants (e.g. one that just ran a stress test) can land ~1000 txns in
+//     5 min; the Time Skip's MIN_GAP_MS clamp keeps the playback duration
+//     reasonable. Cursor pagination is the next refinement if a window truly
+//     exceeds 1000 events.
 
 export type ReplayEvent = {
   id: string;
@@ -65,7 +67,7 @@ export function useReplayQueue(): ReplayQueueState {
       .listTransactions({
         from: asOf.toISOString(),
         to: fetchedAt.toISOString(),
-        limit: 200,
+        limit: 1000,
       })
       .then((page) => {
         if (cancelled) return;

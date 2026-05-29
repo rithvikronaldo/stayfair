@@ -157,7 +157,7 @@ function CurlCard({
   }
 
   return (
-    <div className="fixed right-4 top-12 z-30 w-[520px] border border-border bg-surface-1 p-3 shadow-lg">
+    <div className="fixed right-4 top-[84px] z-30 w-[520px] border border-border bg-surface-1 p-3 shadow-lg">
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="num text-[10px] uppercase tracking-[0.14em] text-accent">
           create your first account
@@ -188,12 +188,16 @@ function CurlCard({
 }
 
 function CurlChip({ onExpand }: { onExpand: () => void }) {
+  // top-[84px] clears the LandingStrip (h-9 = 36px) + TopBar (h-10 = 40px)
+  // with a small visual gap so the chip floats clearly below the bar instead
+  // of crashing into the LIVE pill. The previous top-12 dated from before
+  // the topbar was full-width, when the strip alone owned the top edge.
   return (
     <button
       type="button"
       onClick={onExpand}
       aria-label="Show curl"
-      className="num fixed right-4 top-12 z-30 flex items-center gap-2 border border-border bg-surface-1 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-accent shadow-lg hover:border-accent"
+      className="num fixed right-4 top-[84px] z-30 flex items-center gap-2 border border-border bg-surface-1 px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-accent shadow-lg hover:border-accent"
     >
       <span>curl</span>
       <span className="text-muted">↓</span>
