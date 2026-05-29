@@ -156,7 +156,7 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
   -H "Authorization: Bearer ${apiKey ?? "<your_api_key>"}"`;
 
   return (
-    <div className="flex h-20 items-center gap-4 border-t border-border bg-bg px-8">
+    <div className="flex h-[72px] items-center gap-3 border-t border-border bg-bg px-5">
       {/* Replay trigger — the cinematic CTA. Left of NOW for prominence. */}
       <CurlHint curl={replayCurl} align="left">
         <button
@@ -191,7 +191,7 @@ export function ScrubberShell({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
 
       <div
         ref={trackRef}
-        className={`relative flex-1 h-20 select-none ${
+        className={`relative flex-1 h-[72px] select-none ${
           presetsDisabled
             ? "cursor-default"
             : dragPct !== null

@@ -28,7 +28,7 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
 
   return (
     <div
-      className={`relative border-b border-border px-4 py-3.5 ${
+      className={`relative border-b border-border px-3 py-2.5 ${
         agent.active
           ? "bg-[linear-gradient(90deg,rgba(245,158,11,0.04),transparent_40%)] before:absolute before:left-0 before:top-0 before:h-full before:w-px before:bg-accent before:content-['']"
           : ""
@@ -73,10 +73,10 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
         </span>
       </div>
 
-      <div className="mb-1.5 text-[13px] text-fg">{agent.name}</div>
+      <div className="mb-1 text-[12px] text-fg">{agent.name}</div>
 
-      <div className="num flex items-baseline gap-1 text-[22px] leading-none text-fg">
-        <span className="text-[14px] text-dim">{agent.symbol}</span>
+      <div className="num flex items-baseline gap-1 text-[18px] leading-none text-fg">
+        <span className="text-[12px] text-dim">{agent.symbol}</span>
         <span className={flashCls}>
           {whole}
           <span className="text-muted">.{frac}</span>
@@ -85,7 +85,7 @@ export function AgentCard({ agent }: { agent: AgentRow }) {
 
       <Sparkline values={agent.history} active={agent.active} />
 
-      <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1">
+      <div className="mt-2 grid grid-cols-2 gap-x-2.5 gap-y-1">
         <Cell
           k="Available"
           v={fmtMinor(animatedAvailable)}

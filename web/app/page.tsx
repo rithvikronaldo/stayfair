@@ -55,7 +55,7 @@ export default function Home() {
 
   return (
     <div className="relative h-dvh w-dvw overflow-hidden bg-bg text-fg">
-      <div className="grid h-full grid-rows-[36px_40px_1fr_80px]">
+      <div className="grid h-full grid-rows-[32px_36px_1fr_72px]">
         <LandingStrip />
         <TopBar
           agentCount={agents.filter((a) => a.status !== "killed").length}
@@ -63,7 +63,7 @@ export default function Home() {
           txCount={txs.length}
         />
 
-        <main className="grid grid-rows-[minmax(0,1fr)] grid-cols-[280px_1fr_360px] overflow-hidden">
+        <main className="grid grid-rows-[minmax(0,1fr)] grid-cols-[240px_1fr_320px] overflow-hidden">
           <section className="overflow-hidden border-r border-border">
             <AgentsPane agents={agents} />
           </section>

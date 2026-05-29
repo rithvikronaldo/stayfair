@@ -39,7 +39,7 @@ export function TreasuryCenter({
     agents.length === 0 || currencies > 1 || Math.abs(rawSum) < 100; // <$1 drift
 
   return (
-    <div className="relative flex h-full flex-col px-8 pt-6">
+    <div className="relative flex h-full flex-col px-6 pt-4">
       <div className="flex h-6 items-center gap-3">
         <span className="text-[11px] uppercase tracking-[0.12em] text-fg">
           {isSelf ? "Your ledger" : "Ledger"}
@@ -79,7 +79,7 @@ export function TreasuryCenter({
           : "sum of positive balances · sum of all balances is 0 (conservation)"}
       </div>
 
-      <div className="mt-8 grid grid-cols-[auto_1fr_auto] items-end gap-8">
+      <div className="mt-5 grid grid-cols-[auto_1fr_auto] items-end gap-6">
         <HeroNumber totalUsd={totalUsd} flash={flash} />
 
         {/* Side stats: only real, computed metrics. The previous demo-mode
@@ -141,10 +141,10 @@ function HeroNumber({
   void frac;
 
   return (
-    <div className="num flex items-baseline gap-3 leading-none tracking-tight text-fg">
-      <span className="text-[clamp(40px,5vw,64px)] font-light text-dim">$</span>
+    <div className="num flex items-baseline gap-2 leading-none tracking-tight text-fg">
+      <span className="text-[clamp(28px,3.6vw,48px)] font-light text-dim">$</span>
       <motion.span
-        className={`text-[clamp(72px,9vw,128px)] font-light ${flashCls}`}
+        className={`text-[clamp(54px,6.6vw,98px)] font-light ${flashCls}`}
       >
         <motion.span>{display}</motion.span>
       </motion.span>
@@ -280,7 +280,7 @@ function VolumeChart() {
   );
 
   return (
-    <div className="mt-8 flex flex-1 flex-col border-t border-border-2 pt-4">
+    <div className="mt-5 flex flex-1 flex-col border-t border-border-2 pt-3">
       <div className="flex h-5 items-center justify-between">
         <span
           className={`num text-[10px] uppercase tracking-[0.1em] ${
