@@ -116,7 +116,7 @@ export function TransactionStream({ txs }: { txs: TxRow[] }) {
               onClick={() => setFilter(f.id)}
               aria-pressed={active}
               title={f.tip}
-              className={`flex flex-1 items-center justify-center gap-1.5 border-r border-border-2 text-[10px] uppercase tracking-[0.14em] last:border-r-0 transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 border-r border-border px-2 text-[10px] uppercase tracking-[0.12em] last:border-r-0 transition-colors ${
                 active
                   ? "bg-surface-1 text-fg"
                   : muted
