@@ -48,33 +48,44 @@ export function ReplayBanner({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
+          initial={{ opacity: 0, x: 8 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 8 }}
           transition={{ duration: DUR.entrance, ease: EASE.outExpo }}
-          className="absolute left-1/2 top-20 z-30 w-[300px] -translate-x-1/2 border border-accent bg-bg/95 px-5 py-4 shadow-[0_4px_24px_rgba(245,158,11,0.22)] backdrop-blur"
+          className="absolute right-4 top-20 z-30 w-[230px] border border-accent bg-bg/95 px-3 py-2.5 shadow-[0_4px_24px_rgba(245,158,11,0.22)] backdrop-blur"
           role="status"
           aria-live="polite"
         >
-          <div className="flex flex-col items-center gap-2.5">
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${isPlaying ? "live-breathe" : ""}`}
-                style={{ background: "var(--accent)" }}
-              />
-              <span className="num text-[12px] tracking-[0.14em] text-accent uppercase">
-                {label}
-              </span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${isPlaying ? "live-breathe" : ""}`}
+                  style={{ background: "var(--accent)" }}
+                />
+                <span className="num text-[10px] tracking-[0.14em] text-accent uppercase">
+                  {label}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => timeSkip.snapToNow()}
+                title="Back to LIVE"
+                aria-label="Back to LIVE"
+                className="num text-[10px] tracking-[0.1em] text-dim hover:text-fg uppercase"
+              >
+                LIVE ←
+              </button>
             </div>
 
-            <div className="num text-[11px] tracking-[0.06em] text-muted">
+            <div className="num text-[10px] tracking-[0.05em] text-muted leading-tight">
               {sub}
             </div>
 
             {/* Live progress bar — the clearest signal that something real is
                 advancing, and how far it's gotten. */}
             {(isPlaying || isDone) && total > 0 && (
-              <div className="h-1 w-full overflow-hidden rounded-full bg-border-2">
+              <div className="h-0.5 w-full overflow-hidden rounded-full bg-border-2">
                 <motion.div
                   className="h-full rounded-full"
                   style={{ background: isDone ? "var(--neon)" : "var(--accent)" }}
@@ -84,24 +95,15 @@ export function ReplayBanner({ timeSkip }: { timeSkip: UseTimeSkipApi }) {
               </div>
             )}
 
-            <div className="flex items-center gap-2 pt-1">
-              {isDone && (
-                <button
-                  type="button"
-                  onClick={() => timeSkip.replayLast(REPLAY_AGAIN_MIN)}
-                  className="num flex h-8 items-center justify-center border border-accent px-3 text-[11px] uppercase tracking-[0.14em] text-accent hover:bg-accent/10"
-                >
-                  ▶ Replay again
-                </button>
-              )}
+            {isDone && (
               <button
                 type="button"
-                onClick={() => timeSkip.snapToNow()}
-                className="num flex h-8 items-center justify-center border border-border px-3 text-[11px] uppercase tracking-[0.14em] text-fg hover:border-accent"
+                onClick={() => timeSkip.replayLast(REPLAY_AGAIN_MIN)}
+                className="num flex h-6 w-full items-center justify-center border border-accent px-2 text-[10px] uppercase tracking-[0.14em] text-accent hover:bg-accent/10"
               >
-                ← Back to LIVE
+                ▶ Replay again
               </button>
-            </div>
+            )}
           </div>
         </motion.div>
       )}

@@ -52,6 +52,8 @@ export default function Home() {
   const ccyCount = new Set(agents.map((a) => a.currency)).size;
   const asOf = useStore((s) => s.asOf);
   const inReplay = asOf !== null;
+  const timeSkipPhase = useStore((s) => s.timeSkipPhase);
+  const isRewinding = timeSkipPhase === "rewinding";
 
   return (
     <div className="relative h-dvh w-dvw overflow-hidden bg-bg text-fg">
@@ -91,6 +93,8 @@ export default function Home() {
       <ActionDialog />
 
       {inReplay && <div className="replay-tint" />}
+      {/* keyed remount so the 700ms sweep re-runs on each new rewind */}
+      {isRewinding && <div key={asOf?.getTime() ?? 0} className="rewind-sweep" />}
 
       <div className="vignette" />
     </div>

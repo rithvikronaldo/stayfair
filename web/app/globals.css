@@ -113,6 +113,55 @@ body {
   animation: row-pulse 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Rewind sweep — runs once when the Time Skip enters its "rewinding" phase.
+   A bright amber gradient travels right→left across the dashboard like a
+   tape-rewind indicator, paired with subtle horizontal scanlines for a
+   "wound back" texture. Slow-start fast-finish (ease-in) so it reads as
+   "snapping back to the past" rather than gliding. */
+@keyframes rewind-sweep-bar {
+  0%   { transform: translateX(120%); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translateX(-120%); opacity: 0; }
+}
+@keyframes rewind-scanlines-pulse {
+  0%, 100% { opacity: 0; }
+  20%, 80% { opacity: 0.5; }
+}
+.rewind-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+.rewind-sweep::before {
+  content: "";
+  position: absolute;
+  inset: 0 -40% 0 -40%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(245, 158, 11, 0.04) 40%,
+    rgba(245, 158, 11, 0.18) 50%,
+    rgba(245, 158, 11, 0.04) 60%,
+    transparent 100%
+  );
+  animation: rewind-sweep-bar 700ms cubic-bezier(0.55, 0, 0.8, 0.2) forwards;
+}
+.rewind-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(245, 158, 11, 0.05) 2px,
+    rgba(245, 158, 11, 0.05) 3px
+  );
+  animation: rewind-scanlines-pulse 700ms ease-out forwards;
+}
+
 /* Cool-wash overlay applied to the entire dashboard while in REPLAY. ~6%
    sky-blue. Pointer-events disabled so it never blocks interaction. Sits
    above content but below the vignette + welcome sidebar. */
