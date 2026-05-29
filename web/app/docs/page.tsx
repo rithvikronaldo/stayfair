@@ -25,6 +25,7 @@ export default function DocsPage() {
         <Transactions />
         <Authorizations />
         <Balances />
+        <Stress />
         <EventsStream />
         <Multitenancy />
         <Foot />
@@ -148,7 +149,7 @@ function Tenants() {
       <Endpoint
         method="POST"
         path="/tenants"
-        desc="Create a tenant. Returns the API key once. Hash-stored — store it somewhere."
+        desc="Create a tenant — or, if the email already exists, rotate its API key and return the existing tenant. Idempotent on email. The `created` flag distinguishes a fresh signup (true) from a rotation (false). The raw key is shown once; the database only stores its SHA-256 hash."
         curl={`curl -X POST ${API_URL}/tenants \\
   -H "Content-Type: application/json" \\
   -d '{"email": "you@example.com", "name": "Acme"}'`}
@@ -159,7 +160,8 @@ function Tenants() {
     "name": "Acme",
     "created_at": "2026-05-18T09:12:43Z"
   },
-  "api_key": "ac_NG_23_mO4gQSuzXEoNG-y-EWspcYLMTHNDjM75bLKDE",
+  "api_key": "ac_REPLACE_WITH_YOUR_KEY",
+  "created": true,
   "api_key_warning": "Save this key — it will not be shown again."
 }`}
       />
@@ -235,19 +237,19 @@ function Transactions() {
       <Endpoint
         method="POST"
         path="/transactions"
-        desc="Post a balanced transaction. Use the Idempotency-Key header so retries don't double-write."
+        desc="Post a balanced transaction. Use the Idempotency-Key header so retries don't double-write. A request with a known key replays the original response and adds Idempotent-Replay: true."
         curl={`curl -X POST ${API_URL}/transactions \\
   -H "Authorization: Bearer ac_YOUR_KEY" \\
-  -H "Idempotency-Key: booking_B001" \\
+  -H "Idempotency-Key: settle_2026_05_29_batch_001" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "description": "Booking #B001",
-    "occurred_at": "2026-04-21T14:32:00Z",
+    "description": "Card settlement — vendor split",
+    "occurred_at": "2026-05-29T14:32:00Z",
     "entries": [
-      {"account": "guest_payments", "amount": 1000000, "currency": "INR", "direction": "in"},
-      {"account": "host_payable",   "amount":  850000, "currency": "INR", "direction": "out"},
-      {"account": "commission",     "amount":  130000, "currency": "INR", "direction": "out"},
-      {"account": "gst_payable",    "amount":   20000, "currency": "INR", "direction": "out"}
+      {"account": "cash",         "amount": 100000, "currency": "USD", "direction": "out"},
+      {"account": "vendor_pool",  "amount":  85000, "currency": "USD", "direction": "in"},
+      {"account": "fees",         "amount":  13000, "currency": "USD", "direction": "in"},
+      {"account": "reserve",      "amount":   2000, "currency": "USD", "direction": "in"}
     ]
   }'`}
       />
@@ -378,6 +380,51 @@ function Balances() {
   );
 }
 
+function Stress() {
+  return (
+    <Section id="stress" title="Stress / load test">
+      <p className="text-[14px] leading-relaxed text-muted">
+        Bulk-post N balanced transactions through the same{" "}
+        <code className="num text-fg">ledger.Post()</code> primitive every
+        other write uses. No fast path, no fixtures — real entries, real
+        commits, same invariant check. The endpoint is rate-limited to
+        signed-in tenants and capped at <code className="num text-fg">N = 10,000</code>{" "}
+        per call. Used by the dashboard's ▶ Stress 1k button and by anyone
+        wanting to measure their own ledger's throughput honestly.
+      </p>
+      <Endpoint
+        method="POST"
+        path="/stress"
+        desc="Run a bulk-post stress test against the current tenant. `n` is the number of transactions to post; `concurrency` (optional, default 1) spreads them across N goroutines. Returns aggregate timing + the invariant-violations counter (always 0 by construction — every Post() runs CheckBalanced + the deferred Postgres trigger)."
+        curl={`curl -X POST ${API_URL}/stress \\
+  -H "Authorization: Bearer ac_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"n": 1000, "concurrency": 4}'`}
+        response={`{
+  "n_posted": 1000,
+  "elapsed_ms": 2037,
+  "tps_peak": 491.2,
+  "p50_commit_ms": 7.9,
+  "p99_commit_ms": 14.5,
+  "invariant_violations": 0,
+  "serialization_retries": 0,
+  "currency": "USD"
+}`}
+      />
+      <p className="mt-3 text-[14px] leading-relaxed text-muted">
+        Numbers above are from an M-series local + Postgres in Docker.
+        <code className="num text-fg"> serialization_retries</code> stays at 0
+        because <code className="num text-fg">ledger.Post()</code> is{" "}
+        <code className="num text-fg">READ COMMITTED</code> + append-only —
+        no read-modify-write on account rows, no{" "}
+        <code className="num text-fg">FOR UPDATE</code>, nothing for Postgres
+        to abort and retry. Contention shows up as lock-wait latency, not
+        40001 errors.
+      </p>
+    </Section>
+  );
+}
+
 function EventsStream() {
   return (
     <Section id="events" title="Events stream (SSE)">
@@ -417,14 +464,11 @@ function Multitenancy() {
         lives in the SQL where{" "}
         <code className="num text-fg">EXPLAIN</code> can see it, not in a
         policy that has to be reverse-engineered when a row goes missing.
-        Writeup:{" "}
-        <a
-          href="https://rithvikronaldo.dev/adding-tenants-to-a-ledger"
-          className="text-accent hover:opacity-80"
-        >
-          Adding tenants to a ledger that had one for three weeks
-        </a>
-        .
+        RLS ties the predicate to a session variable inside a transaction;
+        pgx pools recycle connections; one leaked{" "}
+        <code className="num text-fg">SET LOCAL</code> away from a
+        cross-tenant read. The predicate written in every SQL string is
+        uglier but grep-able and code-reviewable.
       </p>
     </Section>
   );
