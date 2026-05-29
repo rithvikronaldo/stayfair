@@ -1,0 +1,40 @@
+# Render config for the acta Go API → api.rithvikronaldo.dev
+#
+# Frontend deploys to Vercel separately (acta.rithvikronaldo.dev).
+# Database is Neon (Postgres) — connection string set as a secret in the
+# Render dashboard, not committed here.
+#
+# Free tier caveats:
+#   - Spins down after 15 minutes of inactivity. Cold start ~30s on the next
+#     request. We mitigate this with an external pinger (cron-job.org or
+#     uptimerobot) hitting /health every 10 minutes — keeps the dyno warm
+#     24/7 so cold visitors of acta.rithvikronaldo.dev never get the wake
+#     latency on the cinematic replay-hook moment.
+#   - 750 hrs/mo free, well under the 24/7 = 720 hrs cap.
+#
+# Migration to Fly (when a card is on file):
+#   - Same Dockerfile.api, same env vars (DB_URL, PORT).
+#   - `fly launch --no-deploy` + `fly secrets set DB_URL=…` + `fly deploy`.
+#   - Swap the `api` DNS CNAME from <render>.onrender.com to <app>.fly.dev.
+#   - Set TTL low (60s) at least an hour before swap for zero downtime.
+#
+# Deploy from the Render dashboard:
+#   1. New → Blueprint → connect this repo.
+#   2. Render reads this file and provisions the service.
+#   3. Set DB_URL secret (Neon connection string with ?sslmode=require).
+#   4. Custom domain api.rithvikronaldo.dev points to the *.onrender.com
+#      hostname via CNAME at your DNS provider.
+
+services:
+  - type: web
+    name: acta-api
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerfilePath: ./Dockerfile.api
+    healthCheckPath: /health
+    envVars:
+      - key: DB_URL
+        sync: false   # set in dashboard — Neon connection string
+      - key: PORT
+        value: "8080"
