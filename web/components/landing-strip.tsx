@@ -31,6 +31,13 @@ function setDismissed(apiKey: string, dismissed: boolean) {
   }
 }
 
+// The dashboard is tuned for desktop ≥ 1440px (fixed 3-column grid, big
+// hero number, tx stream that needs ~360px). Below 1280px it gets visibly
+// cramped but still loads and works. Per the W6 launch plan, mobile-native
+// is post-launch — we ship desktop-only with a one-line notice that sets
+// expectations for narrow-screen visitors instead of blocking them.
+const NARROW_BREAKPOINT_PX = 1280;
+
 export function LandingStrip() {
   const apiKey = useApiKey((s) => s.apiKey);
   const email = useApiKey((s) => s.email);
@@ -38,6 +45,7 @@ export function LandingStrip() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [cardHidden, setCardHidden] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false);
 
   useEffect(() => {
     hydrateApiKey();
@@ -49,6 +57,17 @@ export function LandingStrip() {
         }
       });
     }
+  }, []);
+
+  // Watch viewport width. matchMedia is the right primitive here — fires
+  // once on subscribe and again on every cross-threshold resize. Runs only
+  // after mount so SSR + first client render match.
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${NARROW_BREAKPOINT_PX}px)`);
+    setIsNarrow(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   // Re-check the dismiss flag whenever the key changes (sign-in, sign-out,
@@ -75,6 +94,17 @@ export function LandingStrip() {
               ? `Signed in as ${email || "you"} — your tenant view, polled every 5s.`
               : "Multi-currency, double-entry, point-in-time-queryable. Below is the public demo tenant — get your own with a curl."}
           </span>
+          {mounted && isNarrow && (
+            <>
+              <span className="text-[11px] text-dim">·</span>
+              <span
+                className="truncate text-[11px] text-accent"
+                title="The dashboard's 3-column grid is tuned for ≥ 1440px wide displays. It still works at narrower widths but the layout reads cramped — open on a wider screen (or zoom out to ~80%) for the intended view."
+              >
+                Best viewed on desktop ≥ 1440px wide
+              </span>
+            </>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
