@@ -32,6 +32,7 @@ export default function Image() {
             color: "#A1A1AA",
           }}
         >
+          <span style={{ color: "#F59E0B", fontWeight: 700, fontSize: "30px" }}>$</span>
           <span style={{ color: "#FAFAFA", fontWeight: 600 }}>ACTA</span>
           <span style={{ color: "#52525B" }}>·</span>
           <span>Ledger Sandbox</span>

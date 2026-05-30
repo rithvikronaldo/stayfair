@@ -24,7 +24,12 @@ export function TopBar({
   return (
     <header className="relative flex h-10 items-center border-b border-border bg-bg">
       <Group>
-        <div className="h-2 w-2 bg-accent" />
+        <span
+          className="text-[13px] font-bold leading-none text-accent"
+          style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+        >
+          $
+        </span>
         <span className="text-[11px] font-semibold tracking-[0.18em] text-fg">
           ACTA
         </span>
